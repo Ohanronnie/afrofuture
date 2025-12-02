@@ -1,0 +1,79 @@
+import { Client, LocalAuth } from "whatsapp-web.js";
+import qrcode from "qrcode-terminal";
+
+// Initialize WhatsApp client
+export const client = new Client({
+  authStrategy: new LocalAuth({
+    dataPath: ".wwebjs_auth",
+  }),
+  puppeteer: {
+    headless: true,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-accelerated-2d-canvas",
+      "--no-first-run",
+      "--no-zygote",
+      "--disable-gpu",
+    ],
+  },
+});
+
+// Debug: Log all client events
+console.log("[DEBUG] Setting up WhatsApp client event listeners...");
+
+// QR Code for authentication
+client.on("qr", (qr) => {
+  console.log("[DEBUG] QR code event received");
+  console.log("\n🔳 Scan this QR code with WhatsApp:");
+  qrcode.generate(qr, { small: true });
+  console.log("[DEBUG] QR code displayed");
+});
+
+// Loading screen
+client.on("loading_screen", (percent, message) => {
+  console.log(`[DEBUG] Loading: ${percent}% - ${message}`);
+});
+
+// Client ready
+client.on("ready", () => {
+  console.log("[DEBUG] Client ready event fired");
+  console.log("✅ AfroFuture 2025 Bot is ready!");
+  console.log("📱 Waiting for messages...\n");
+});
+
+// Handle authentication
+client.on("authenticated", () => {
+  console.log("[DEBUG] Authenticated event fired");
+  console.log("✅ Authenticated successfully!");
+});
+
+client.on("auth_failure", (msg) => {
+  console.error("[DEBUG] Auth failure event fired");
+  console.error("❌ Authentication failed:", msg);
+});
+
+// Additional debug events
+client.on("change_state", (state) => {
+  console.log(`[DEBUG] State changed: ${state}`);
+});
+
+client.on("disconnected", (reason) => {
+  console.log(`[DEBUG] Disconnected event fired: ${reason}`);
+  console.log("⚠️  Client disconnected:", reason);
+});
+
+client.on("remote_session_saved", () => {
+  console.log("[DEBUG] Remote session saved event fired");
+  console.log("💾 Remote session saved");
+});
+
+// Error handling
+client.on("error", (error) => {
+  console.error("[DEBUG] Client error event fired");
+  console.error("❌ WhatsApp client error:", error);
+});
+
+// Log when client is being initialized
+console.log("[DEBUG] WhatsApp client instance created");
