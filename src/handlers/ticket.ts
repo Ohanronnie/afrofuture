@@ -21,9 +21,10 @@ export async function handleTicketSelection(
 
   session.ticketType = ticketType;
   session.totalPrice = TICKETS[ticketType].price;
+  session.paymentType = "full";
 
   const msg = getTicketConfirmationMessage(ticketType);
   await message.reply(msg);
 
-  session.state = SESSION_STATES.SELECT_PAYMENT_TYPE;
+  session.state = SESSION_STATES.AWAITING_EMAIL;
 }

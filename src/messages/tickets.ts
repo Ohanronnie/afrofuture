@@ -17,10 +17,5 @@ export function getTicketConfirmationMessage(ticketType: TicketType): string {
   const ticket = TICKETS[ticketType];
   return `✅ You selected *${ticket.name}* — GH₵${ticket.price}
 
-How would you like to pay?
-
-1️⃣ Pay in Full
-2️⃣ Pay in Installments
-
-Reply *1* or *2*.`;
+📧 Before we generate your payment link, please reply with your *email address* (e.g. name@example.com). We'll send your receipt and ticket details there.`;
 }

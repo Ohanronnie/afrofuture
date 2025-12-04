@@ -10,10 +10,7 @@ import { getWelcomeMessage } from "../messages/welcome.js";
 import { handleError } from "../errors/errorHandler.js";
 import { handleMainMenu } from "./menu.js";
 import { handleTicketSelection } from "./ticket.js";
-import {
-  handlePaymentTypeSelection,
-  handleEmailCollection,
-} from "./payment.js";
+import { handleEmailCollection } from "./payment.js";
 import { handleInstallmentPlanSelection } from "./installment.js";
 import { handleWalletTransfer } from "./wallet.js";
 
@@ -61,11 +58,6 @@ export async function handleMessage(
 
       case SESSION_STATES.SELECT_TICKET:
         await handleTicketSelection(message, msg, session);
-        await updateSession(chatId, session);
-        break;
-
-      case SESSION_STATES.SELECT_PAYMENT_TYPE:
-        await handlePaymentTypeSelection(message, msg, session);
         await updateSession(chatId, session);
         break;
 
