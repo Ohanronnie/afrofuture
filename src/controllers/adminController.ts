@@ -20,6 +20,8 @@ const generatePaymentLinkSchema = z.object({
   chatId: z.string().min(1, "Chat ID is required"),
   amount: z.number().positive("Amount must be positive"),
   ticketType: z.enum(["GA", "VIP"]).optional(),
+  paymentType: z.enum(["full", "installment"]).optional(),
+  installmentNumber: z.number().optional(),
 });
 
 const sendMessageSchema = z.object({
@@ -322,7 +324,8 @@ export const generatePaymentLinkForUser = async (
 ) => {
   try {
     const validatedData = generatePaymentLinkSchema.parse(req.body);
-    const { chatId, amount, ticketType } = validatedData;
+    const { chatId, amount, ticketType, paymentType, installmentNumber } =
+      validatedData;
 
     // Check if user exists
     const user = await User.findOne({ chatId });
@@ -352,7 +355,8 @@ export const generatePaymentLinkForUser = async (
       chatId,
       {
         ticketType: finalTicketType,
-        paymentType: "full",
+        paymentType: paymentType || "full",
+        installmentNumber: installmentNumber,
       }
     );
 
@@ -364,7 +368,8 @@ export const generatePaymentLinkForUser = async (
         chatId,
         amount,
         ticketType: finalTicketType,
-        paymentType: "full",
+        paymentType: paymentType || "full",
+        installmentNumber: installmentNumber,
         userName: user.name,
       },
     });
@@ -426,6 +431,78 @@ export const sendMessageToUser = async (req: Request, res: Response) => {
     res.status(500).json({
       status: "error",
       message: error.message || "Failed to send message",
+    });
+  }
+};
+
+/**
+ * NEW API: Create user manually (Admin only)
+ * This allows admins to manually add users to the system
+ */
+const createUserSchema = z.object({
+  chatId: z.string().min(1, "Chat ID is required"),
+  name: z.string().min(1, "Name is required"),
+  phoneNumber: z.string().optional(),
+  email: z.string().email().optional().or(z.literal("")),
+});
+
+export const createUser = async (req: Request, res: Response) => {
+  try {
+    const validatedData = createUserSchema.parse(req.body);
+    const { chatId, name, phoneNumber, email } = validatedData;
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ chatId });
+    if (existingUser) {
+      return res.status(400).json({
+        status: "error",
+        message: "User with this chat ID already exists",
+      });
+    }
+
+    // Create new user
+    const user = new User({
+      chatId,
+      name,
+      phoneNumber: phoneNumber || undefined,
+      email: email || undefined,
+      session: { state: "WELCOME" },
+    });
+
+    await user.save();
+
+    res.status(201).json({
+      status: "success",
+      data: {
+        user: {
+          chatId: user.chatId,
+          name: user.name,
+          phoneNumber: user.phoneNumber,
+          email: user.email,
+          createdAt: user.createdAt,
+        },
+      },
+    });
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        status: "error",
+        message: "Validation error",
+        errors: error.issues,
+      });
+    }
+
+    if (error.code === 11000) {
+      return res.status(400).json({
+        status: "error",
+        message: "User with this chat ID already exists",
+      });
+    }
+
+    console.error("Error creating user:", error);
+    res.status(500).json({
+      status: "error",
+      message: error.message || "Failed to create user",
     });
   }
 };
