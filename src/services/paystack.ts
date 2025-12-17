@@ -75,6 +75,7 @@ class PaystackService {
           amount: amountInKobo,
           email,
           currency: "GHS",
+          channels: ["mobile_money"], // Restrict to Mobile Money only
           metadata,
           callback_url: new URL(
             "/api/payments/callback",
