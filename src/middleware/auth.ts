@@ -40,7 +40,21 @@ export const authenticateAdmin = async (
     // Verify token
     try {
       const decoded = jwt.verify(token, env.jwtSecret) as AdminPayload;
-      (req as any).admin = { email: decoded.email };
+      // Get admin info from database
+      const { Admin } = await import("../models/Admin.js");
+      const admin = await Admin.findOne({ email: decoded.email, isActive: true });
+      if (!admin) {
+        return res.status(401).json({
+          status: "error",
+          message: "Admin account not found or inactive",
+        });
+      }
+      (req as any).admin = { 
+        email: admin.email, 
+        name: admin.name,
+        role: admin.role,
+        id: admin._id 
+      };
       next();
     } catch (error) {
       return res.status(401).json({

@@ -6,7 +6,15 @@ import {
   getUserInfo,
   generatePaymentLinkForUser,
   sendMessageToUser,
+  createUser,
 } from "../controllers/adminController.js";
+import {
+  getCurrentAdmin,
+  getAllAdmins,
+  createAdmin,
+  updateAdmin,
+  deleteAdmin,
+} from "../controllers/adminManagementController.js";
 
 const router = Router();
 
@@ -229,5 +237,62 @@ router.post("/payment-link", generatePaymentLinkForUser);
  *         description: Server error
  */
 router.post("/send-message", sendMessageToUser);
+
+/**
+ * @swagger
+ * /admin/users:
+ *   post:
+ *     summary: Create a new user manually (Admin only)
+ *     description: Allows admin to manually create a user in the system
+ *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - chatId
+ *               - name
+ *             properties:
+ *               chatId:
+ *                 type: string
+ *                 description: User's WhatsApp chat ID (e.g., "2331234567890@c.us")
+ *                 example: "2331234567890@c.us"
+ *               name:
+ *                 type: string
+ *                 description: User's name
+ *                 example: "John Doe"
+ *               phoneNumber:
+ *                 type: string
+ *                 description: User's phone number (optional)
+ *                 example: "0241234567"
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 description: User's email address (optional)
+ *                 example: "john@example.com"
+ *     responses:
+ *       201:
+ *         description: User created successfully
+ *       400:
+ *         description: Validation error or user already exists
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+router.post("/users", createUser);
+
+/**
+ * Admin Management Routes
+ */
+router.get("/me", getCurrentAdmin);
+router.get("/admins", getAllAdmins);
+router.post("/admins", createAdmin);
+router.put("/admins/:id", updateAdmin);
+router.delete("/admins/:id", deleteAdmin);
 
 export default router;

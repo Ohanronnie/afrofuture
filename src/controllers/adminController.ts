@@ -6,6 +6,7 @@ import { env } from "../config/env.js";
 import { getHashedAdminPassword } from "../config/initAdmin.js";
 import { backend } from "../services/backend.js";
 import { User } from "../models/User.js";
+import { Admin } from "../models/Admin.js";
 import { getSession } from "../utils/session.js";
 import type { UserSession } from "../types/session.js";
 import { TICKETS } from "../config/constants.js";
@@ -20,6 +21,8 @@ const generatePaymentLinkSchema = z.object({
   chatId: z.string().min(1, "Chat ID is required"),
   amount: z.number().positive("Amount must be positive"),
   ticketType: z.enum(["GA", "VIP"]).optional(),
+  paymentType: z.enum(["full", "installment"]).optional(),
+  installmentNumber: z.number().optional(),
 });
 
 const sendMessageSchema = z.object({
@@ -51,13 +54,49 @@ export const adminLogin = async (req: Request, res: Response) => {
       });
     }
 
-    // Verify password (compare with hashed password)
-    const hashedPassword = getHashedAdminPassword();
-    const isValidPassword = await bcrypt.compare(password, hashedPassword);
-    if (!isValidPassword) {
-      return res.status(401).json({
+    // Get or create admin in database
+    let adminInfo = await Admin.findOne({ email: env.adminEmail });
+
+    if (!adminInfo) {
+      // Create default admin if doesn't exist
+      const hashedPassword = await bcrypt.hash(password, 10);
+      adminInfo = await Admin.create({
+        email: env.adminEmail,
+        password: hashedPassword,
+        name: env.adminEmail.split("@")[0] || "Admin",
+        role: "super_admin",
+        isActive: true,
+      });
+    } else {
+      // Verify password
+      const isValidPassword = await bcrypt.compare(
+        password,
+        adminInfo.password
+      );
+      if (!isValidPassword) {
+        // Also check against env password for backward compatibility
+        const envHashedPassword = getHashedAdminPassword();
+        const isValidEnvPassword = await bcrypt.compare(
+          password,
+          envHashedPassword
+        );
+        if (!isValidEnvPassword) {
+          return res.status(401).json({
+            status: "error",
+            message: "Invalid credentials",
+          });
+        }
+        // Update password in database if env password was used
+        adminInfo.password = await bcrypt.hash(password, 10);
+        await adminInfo.save();
+      }
+    }
+
+    // Check if admin is active
+    if (!adminInfo.isActive) {
+      return res.status(403).json({
         status: "error",
-        message: "Invalid credentials",
+        message: "Admin account is inactive",
       });
     }
 
@@ -69,7 +108,7 @@ export const adminLogin = async (req: Request, res: Response) => {
         message: "JWT secret not configured",
       });
     }
-    const token = jwt.sign({ email: env.adminEmail }, secret, {
+    const token = jwt.sign({ email: adminInfo.email }, secret, {
       expiresIn: env.jwtExpiresIn || "24h",
     } as jwt.SignOptions);
 
@@ -77,7 +116,8 @@ export const adminLogin = async (req: Request, res: Response) => {
       status: "success",
       data: {
         token,
-        email: env.adminEmail,
+        email: adminInfo.email,
+        name: adminInfo.name,
         expiresIn: env.jwtExpiresIn,
       },
     });
@@ -322,7 +362,8 @@ export const generatePaymentLinkForUser = async (
 ) => {
   try {
     const validatedData = generatePaymentLinkSchema.parse(req.body);
-    const { chatId, amount, ticketType } = validatedData;
+    const { chatId, amount, ticketType, paymentType, installmentNumber } =
+      validatedData;
 
     // Check if user exists
     const user = await User.findOne({ chatId });
@@ -352,7 +393,8 @@ export const generatePaymentLinkForUser = async (
       chatId,
       {
         ticketType: finalTicketType,
-        paymentType: "full",
+        paymentType: paymentType || "full",
+        installmentNumber: installmentNumber,
       }
     );
 
@@ -364,7 +406,8 @@ export const generatePaymentLinkForUser = async (
         chatId,
         amount,
         ticketType: finalTicketType,
-        paymentType: "full",
+        paymentType: paymentType || "full",
+        installmentNumber: installmentNumber,
         userName: user.name,
       },
     });
@@ -426,6 +469,78 @@ export const sendMessageToUser = async (req: Request, res: Response) => {
     res.status(500).json({
       status: "error",
       message: error.message || "Failed to send message",
+    });
+  }
+};
+
+/**
+ * NEW API: Create user manually (Admin only)
+ * This allows admins to manually add users to the system
+ */
+const createUserSchema = z.object({
+  chatId: z.string().min(1, "Chat ID is required"),
+  name: z.string().min(1, "Name is required"),
+  phoneNumber: z.string().optional(),
+  email: z.string().email().optional().or(z.literal("")),
+});
+
+export const createUser = async (req: Request, res: Response) => {
+  try {
+    const validatedData = createUserSchema.parse(req.body);
+    const { chatId, name, phoneNumber, email } = validatedData;
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ chatId });
+    if (existingUser) {
+      return res.status(400).json({
+        status: "error",
+        message: "User with this chat ID already exists",
+      });
+    }
+
+    // Create new user
+    const user = new User({
+      chatId,
+      name,
+      phoneNumber: phoneNumber || undefined,
+      email: email || undefined,
+      session: { state: "WELCOME" },
+    });
+
+    await user.save();
+
+    res.status(201).json({
+      status: "success",
+      data: {
+        user: {
+          chatId: user.chatId,
+          name: user.name,
+          phoneNumber: user.phoneNumber,
+          email: user.email,
+          createdAt: user.createdAt,
+        },
+      },
+    });
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        status: "error",
+        message: "Validation error",
+        errors: error.issues,
+      });
+    }
+
+    if (error.code === 11000) {
+      return res.status(400).json({
+        status: "error",
+        message: "User with this chat ID already exists",
+      });
+    }
+
+    console.error("Error creating user:", error);
+    res.status(500).json({
+      status: "error",
+      message: error.message || "Failed to create user",
     });
   }
 };

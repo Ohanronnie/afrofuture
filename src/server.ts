@@ -7,6 +7,9 @@ import paymentRoutes from "./routes/paymentRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import ticketRoutes from "./routes/ticketRoutes.js";
 import paymentDashboardRoutes from "./routes/paymentDashboardRoutes.js";
+import dashboardRoutes from "./routes/dashboardRoutes.js";
+import reminderRoutes from "./routes/reminderRoutes.js";
+import cors from "cors";
 
 const app = express();
 
@@ -15,7 +18,9 @@ app.use(
   "/payment/webhook",
   express.raw({ type: "application/json" }),
   (req: any, res, next) => {
-    console.log(`[DEBUG] Paystack webhook received: ${JSON.stringify(req.body)}`);
+    console.log(
+      `[DEBUG] Paystack webhook received: ${JSON.stringify(req.body)}`
+    );
     // Store raw body for signature verification
     req.rawBody = req.body;
     // Parse JSON body
@@ -99,6 +104,16 @@ app.get("/", (req, res) => {
   res.redirect("/api-docs");
 });
 
+// allow cors
+app.use(
+  cors({
+    // allow all origins
+    origin: "*",
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
+
 // Routes
 app.use("/broadcast", broadcastRoutes); // POST /broadcast (backward compatibility)
 app.use("/broadcasts", broadcastRoutes); // All broadcast routes
@@ -107,6 +122,8 @@ app.use("/api/payments", paymentRoutes); // Payment webhook and callback routes
 app.use("/admin", adminRoutes); // Admin routes (requires authentication)
 app.use("/admin/tickets", ticketRoutes); // Ticket management routes (requires authentication)
 app.use("/admin/payments", paymentDashboardRoutes); // Payment dashboard routes (requires authentication)
+app.use("/admin/dashboard", dashboardRoutes); // Dashboard overview routes (requires authentication) - NEW API
+app.use("/admin/reminders", reminderRoutes); // Reminder management routes (requires authentication)
 
 export const startServer = (port: number = 3000) => {
   console.log(`[DEBUG] Starting Express server on port ${port}...`);
