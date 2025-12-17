@@ -50,8 +50,7 @@ const adminSchema = new Schema<IAdmin>(
 );
 
 // Index for faster queries
-adminSchema.index({ email: 1 });
+// adminSchema.index({ email: 1 });
 adminSchema.index({ isActive: 1 });
 
 export const Admin = mongoose.model<IAdmin>("Admin", adminSchema);
-
