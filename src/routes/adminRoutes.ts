@@ -8,6 +8,13 @@ import {
   sendMessageToUser,
   createUser,
 } from "../controllers/adminController.js";
+import {
+  getCurrentAdmin,
+  getAllAdmins,
+  createAdmin,
+  updateAdmin,
+  deleteAdmin,
+} from "../controllers/adminManagementController.js";
 
 const router = Router();
 
@@ -278,5 +285,14 @@ router.post("/send-message", sendMessageToUser);
  *         description: Server error
  */
 router.post("/users", createUser);
+
+/**
+ * Admin Management Routes
+ */
+router.get("/me", getCurrentAdmin);
+router.get("/admins", getAllAdmins);
+router.post("/admins", createAdmin);
+router.put("/admins/:id", updateAdmin);
+router.delete("/admins/:id", deleteAdmin);
 
 export default router;

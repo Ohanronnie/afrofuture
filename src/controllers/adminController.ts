@@ -6,6 +6,7 @@ import { env } from "../config/env.js";
 import { getHashedAdminPassword } from "../config/initAdmin.js";
 import { backend } from "../services/backend.js";
 import { User } from "../models/User.js";
+import { Admin } from "../models/Admin.js";
 import { getSession } from "../utils/session.js";
 import type { UserSession } from "../types/session.js";
 import { TICKETS } from "../config/constants.js";
@@ -53,13 +54,49 @@ export const adminLogin = async (req: Request, res: Response) => {
       });
     }
 
-    // Verify password (compare with hashed password)
-    const hashedPassword = getHashedAdminPassword();
-    const isValidPassword = await bcrypt.compare(password, hashedPassword);
-    if (!isValidPassword) {
-      return res.status(401).json({
+    // Get or create admin in database
+    let adminInfo = await Admin.findOne({ email: env.adminEmail });
+
+    if (!adminInfo) {
+      // Create default admin if doesn't exist
+      const hashedPassword = await bcrypt.hash(password, 10);
+      adminInfo = await Admin.create({
+        email: env.adminEmail,
+        password: hashedPassword,
+        name: env.adminEmail.split("@")[0] || "Admin",
+        role: "super_admin",
+        isActive: true,
+      });
+    } else {
+      // Verify password
+      const isValidPassword = await bcrypt.compare(
+        password,
+        adminInfo.password
+      );
+      if (!isValidPassword) {
+        // Also check against env password for backward compatibility
+        const envHashedPassword = getHashedAdminPassword();
+        const isValidEnvPassword = await bcrypt.compare(
+          password,
+          envHashedPassword
+        );
+        if (!isValidEnvPassword) {
+          return res.status(401).json({
+            status: "error",
+            message: "Invalid credentials",
+          });
+        }
+        // Update password in database if env password was used
+        adminInfo.password = await bcrypt.hash(password, 10);
+        await adminInfo.save();
+      }
+    }
+
+    // Check if admin is active
+    if (!adminInfo.isActive) {
+      return res.status(403).json({
         status: "error",
-        message: "Invalid credentials",
+        message: "Admin account is inactive",
       });
     }
 
@@ -71,7 +108,7 @@ export const adminLogin = async (req: Request, res: Response) => {
         message: "JWT secret not configured",
       });
     }
-    const token = jwt.sign({ email: env.adminEmail }, secret, {
+    const token = jwt.sign({ email: adminInfo.email }, secret, {
       expiresIn: env.jwtExpiresIn || "24h",
     } as jwt.SignOptions);
 
@@ -79,7 +116,8 @@ export const adminLogin = async (req: Request, res: Response) => {
       status: "success",
       data: {
         token,
-        email: env.adminEmail,
+        email: adminInfo.email,
+        name: adminInfo.name,
         expiresIn: env.jwtExpiresIn,
       },
     });

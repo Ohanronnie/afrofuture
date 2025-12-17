@@ -5,6 +5,7 @@
 import { Router } from "express";
 import { authenticateAdmin } from "../middleware/auth.js";
 import { getDashboardOverview } from "../controllers/dashboardController.js";
+import { getSystemHealth } from "../controllers/systemHealthController.js";
 
 const router = Router();
 
@@ -71,6 +72,6 @@ router.use(authenticateAdmin);
  *         description: Server error
  */
 router.get("/overview", getDashboardOverview);
+router.get("/system-health", getSystemHealth);
 
 export default router;
-

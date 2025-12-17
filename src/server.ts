@@ -8,6 +8,7 @@ import adminRoutes from "./routes/adminRoutes.js";
 import ticketRoutes from "./routes/ticketRoutes.js";
 import paymentDashboardRoutes from "./routes/paymentDashboardRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
+import reminderRoutes from "./routes/reminderRoutes.js";
 import cors from "cors";
 
 const app = express();
@@ -121,6 +122,7 @@ app.use("/admin", adminRoutes); // Admin routes (requires authentication)
 app.use("/admin/tickets", ticketRoutes); // Ticket management routes (requires authentication)
 app.use("/admin/payments", paymentDashboardRoutes); // Payment dashboard routes (requires authentication)
 app.use("/admin/dashboard", dashboardRoutes); // Dashboard overview routes (requires authentication) - NEW API
+app.use("/admin/reminders", reminderRoutes); // Reminder management routes (requires authentication)
 
 export const startServer = (port: number = 8000) => {
   console.log(`[DEBUG] Starting Express server on port ${port}...`);
