@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authenticateAdmin } from "../middleware/auth.js";
+import { uploadImage } from "../middleware/upload.js";
 import {
   adminLogin,
   getAllUsers,
@@ -202,14 +203,14 @@ router.post("/payment-link", generatePaymentLinkForUser);
  * /admin/send-message:
  *   post:
  *     summary: Send message to a user (Admin only)
- *     description: Send a WhatsApp message to a specific user
+ *     description: Send a WhatsApp message to a specific user with optional image attachment
  *     tags: [Admin]
  *     security:
  *       - BearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             required:
@@ -222,8 +223,12 @@ router.post("/payment-link", generatePaymentLinkForUser);
  *                 example: "2331234567890@c.us"
  *               message:
  *                 type: string
- *                 description: Message to send
+ *                 description: Message to send (will be used as caption if image is provided)
  *                 example: "Hello! This is a message from admin."
+ *               image:
+ *                 type: string
+ *                 format: binary
+ *                 description: Optional image file to send (jpeg, jpg, png, gif, webp, max 5MB)
  *     responses:
  *       200:
  *         description: Message sent successfully
@@ -236,7 +241,7 @@ router.post("/payment-link", generatePaymentLinkForUser);
  *       500:
  *         description: Server error
  */
-router.post("/send-message", sendMessageToUser);
+router.post("/send-message", uploadImage.single("image"), sendMessageToUser);
 
 /**
  * @swagger
