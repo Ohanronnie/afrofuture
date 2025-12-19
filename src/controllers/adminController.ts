@@ -303,6 +303,7 @@ export const getUserInfo = async (req: Request, res: Response) => {
         user: {
           chatId: user.chatId,
           name: user.name,
+          email: user.email,
           phoneNumber: user.phoneNumber,
           createdAt: user.createdAt,
           updatedAt: user.updatedAt,
