@@ -125,7 +125,7 @@ app.use("/admin/payments", paymentDashboardRoutes); // Payment dashboard routes 
 app.use("/admin/dashboard", dashboardRoutes); // Dashboard overview routes (requires authentication) - NEW API
 app.use("/admin/reminders", reminderRoutes); // Reminder management routes (requires authentication)
 
-export const startServer = (port: number = 8000) => {
+export const startServer = (port: number = 3000) => {
   console.log(`[DEBUG] Starting Express server on port ${port}...`);
   try {
     const server = app.listen(port, () => {
