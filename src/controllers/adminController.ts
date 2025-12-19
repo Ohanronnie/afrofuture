@@ -159,16 +159,6 @@ export const getAllUsers = async (req: Request, res: Response) => {
     // Optional filters
     const filter: any = {};
 
-    if (req.query.status === "paid") {
-      filter["session.ticketId"] = { $exists: true, $ne: null };
-    } else if (req.query.status === "pending") {
-      filter["session.ticketId"] = { $exists: false };
-      filter["session.remainingBalance"] = { $gt: 0 };
-    } else if (req.query.status === "no_ticket") {
-      filter["session.ticketId"] = { $exists: false };
-      filter["session.amountPaid"] = { $exists: false };
-    }
-
     // Search by name or phone number
     if (req.query.search) {
       const searchRegex = new RegExp(req.query.search as string, "i");
@@ -179,15 +169,12 @@ export const getAllUsers = async (req: Request, res: Response) => {
       ];
     }
 
+    // Get all users first (we'll filter by payment status after enriching)
     const users = await User.find(filter)
       .sort({ createdAt: -1 })
-      .limit(limit)
-      .skip(skip)
       .select("-__v");
 
-    const total = await User.countDocuments(filter);
-
-    // Enrich user data with session information
+    // Enrich user data with session information and filter by payment status
     const enrichedUsers = await Promise.all(
       users.map(async (user) => {
         const session = (await getSession(user.chatId)) as UserSession;
@@ -257,10 +244,26 @@ export const getAllUsers = async (req: Request, res: Response) => {
       })
     );
 
+    // Filter by payment status after enriching
+    let filteredUsers = enrichedUsers;
+    if (req.query.status === "paid") {
+      filteredUsers = enrichedUsers.filter((user) => user.flags.isFullyPaid);
+    } else if (req.query.status === "pending") {
+      filteredUsers = enrichedUsers.filter(
+        (user) => user.flags.hasPartialPayment
+      );
+    } else if (req.query.status === "no_ticket") {
+      filteredUsers = enrichedUsers.filter((user) => user.flags.hasNoPayment);
+    }
+
+    // Apply pagination after filtering
+    const total = filteredUsers.length;
+    const paginatedUsers = filteredUsers.slice(skip, skip + limit);
+
     res.json({
       status: "success",
       data: {
-        users: enrichedUsers,
+        users: paginatedUsers,
         pagination: {
           page,
           limit,

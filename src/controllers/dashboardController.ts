@@ -6,6 +6,7 @@ import type { Request, Response } from "express";
 import { User } from "../models/User.js";
 import { Payment } from "../models/Payment.js";
 import { Ticket } from "../models/Ticket.js";
+import { SoldTicket } from "../models/SoldTicket.js";
 import { getSession } from "../utils/session.js";
 import type { UserSession } from "../types/session.js";
 
@@ -50,9 +51,7 @@ export const getDashboardOverview = async (req: Request, res: Response) => {
     // Ticket statistics
     const totalTickets = await Ticket.countDocuments({});
     const activeTickets = await Ticket.countDocuments({ isActive: true });
-    const totalTicketsSold = await User.countDocuments({
-      "session.ticketId": { $exists: true, $ne: null },
-    });
+    const totalTicketsSold = await SoldTicket.countDocuments({});
 
     // Recent activity (last 10 payments)
     const recentPayments = await Payment.find({ status: "success" })
@@ -159,13 +158,11 @@ export const getDashboardOverview = async (req: Request, res: Response) => {
         : 0;
 
     // Tickets sold trend
-    const ticketsLast7Days = await User.countDocuments({
-      "session.ticketId": { $exists: true, $ne: null },
-      updatedAt: { $gte: sevenDaysAgo },
+    const ticketsLast7Days = await SoldTicket.countDocuments({
+      createdAt: { $gte: sevenDaysAgo },
     });
-    const ticketsPrevious7Days = await User.countDocuments({
-      "session.ticketId": { $exists: true, $ne: null },
-      updatedAt: { $gte: fourteenDaysAgo, $lt: sevenDaysAgo },
+    const ticketsPrevious7Days = await SoldTicket.countDocuments({
+      createdAt: { $gte: fourteenDaysAgo, $lt: sevenDaysAgo },
     });
     const ticketsTrend =
       ticketsPrevious7Days > 0
