@@ -6,6 +6,7 @@ import { env } from "../config/env.js";
 import { getHashedAdminPassword } from "../config/initAdmin.js";
 import { backend } from "../services/backend.js";
 import { User } from "../models/User.js";
+import { Payment } from "../models/Payment.js";
 import { Admin } from "../models/Admin.js";
 import { getSession } from "../utils/session.js";
 import type { UserSession } from "../types/session.js";
@@ -185,18 +186,29 @@ export const getAllUsers = async (req: Request, res: Response) => {
         const ticketType = session.ticketType;
         const ticket = ticketType ? TICKETS[ticketType] : null;
 
+        // Calculate real total paid from payments collection
+        const successfulPayments = await Payment.find({
+          chatId: user.chatId,
+          status: "success",
+        });
+        const realAmountPaid = successfulPayments.reduce(
+          (sum, p) => sum + p.amount,
+          0
+        );
+        const ticketPrice = session.totalPrice || ticket?.price || 0;
+
         // Calculate payment status flags
         const hasTicket = !!session.ticketId;
-        const isFullyPaid = hasTicket || (session.remainingBalance || 0) === 0;
+        const isFullyPaid =
+          hasTicket || (ticketPrice > 0 && realAmountPaid >= ticketPrice);
         const isInstallment = session.paymentType === "installment";
-        const hasPartialPayment = (session.amountPaid || 0) > 0 && !isFullyPaid;
-        const hasNoPayment = !session.amountPaid || session.amountPaid === 0;
+        const hasPartialPayment = realAmountPaid > 0 && !isFullyPaid;
+        const hasNoPayment = realAmountPaid === 0;
 
         // Calculate payment progress
         const paymentProgress =
-          session.totalPrice && session.amountPaid
-            ? (session.amountPaid / session.totalPrice) * 100
-            : 0;
+          ticketPrice > 0 ? (realAmountPaid / ticketPrice) * 100 : 0;
+        const remainingBalance = Math.max(0, ticketPrice - realAmountPaid);
 
         return {
           chatId: user.chatId,
@@ -211,9 +223,9 @@ export const getAllUsers = async (req: Request, res: Response) => {
           },
           payment: {
             type: session.paymentType || null,
-            amountPaid: session.amountPaid || 0,
-            totalPrice: session.totalPrice || ticket?.price || 0,
-            remainingBalance: session.remainingBalance || 0,
+            amountPaid: realAmountPaid,
+            totalPrice: ticketPrice,
+            remainingBalance: remainingBalance,
             progress: Math.round(paymentProgress),
           },
           installment: isInstallment
@@ -283,19 +295,31 @@ export const getUserInfo = async (req: Request, res: Response) => {
     const session = (await getSession(chatId)) as UserSession;
     const ticketType = session.ticketType;
     const ticket = ticketType ? TICKETS[ticketType] : null;
+    console.log(await Payment.find({ status: "success" }));
+
+    // Calculate real total paid from payments collection
+    const successfulPayments = await Payment.find({
+      chatId: user.chatId,
+      status: "success",
+    });
+    const realAmountPaid = successfulPayments.reduce(
+      (sum, p) => sum + p.amount,
+      0
+    );
+    const ticketPrice = session.totalPrice || ticket?.price || 0;
 
     // Calculate payment status flags
     const hasTicket = !!session.ticketId;
-    const isFullyPaid = hasTicket || (session.remainingBalance || 0) === 0;
+    const isFullyPaid =
+      hasTicket || (ticketPrice > 0 && realAmountPaid >= ticketPrice);
     const isInstallment = session.paymentType === "installment";
-    const hasPartialPayment = (session.amountPaid || 0) > 0 && !isFullyPaid;
-    const hasNoPayment = !session.amountPaid || session.amountPaid === 0;
+    const hasPartialPayment = realAmountPaid > 0 && !isFullyPaid;
+    const hasNoPayment = realAmountPaid === 0;
 
     // Calculate payment progress
     const paymentProgress =
-      session.totalPrice && session.amountPaid
-        ? (session.amountPaid / session.totalPrice) * 100
-        : 0;
+      ticketPrice > 0 ? (realAmountPaid / ticketPrice) * 100 : 0;
+    const remainingBalance = Math.max(0, ticketPrice - realAmountPaid);
 
     res.json({
       status: "success",
@@ -315,9 +339,9 @@ export const getUserInfo = async (req: Request, res: Response) => {
         },
         payment: {
           type: session.paymentType || null,
-          amountPaid: session.amountPaid || 0,
-          totalPrice: session.totalPrice || ticket?.price || 0,
-          remainingBalance: session.remainingBalance || 0,
+          amountPaid: realAmountPaid,
+          totalPrice: ticketPrice,
+          remainingBalance: remainingBalance,
           progress: Math.round(paymentProgress),
         },
         installment: isInstallment
