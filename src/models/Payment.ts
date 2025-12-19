@@ -11,6 +11,7 @@ export interface IPayment extends mongoose.Document {
   ticketType?: "GA" | "VIP";
   paymentType?: "full" | "installment";
   installmentNumber?: number;
+  coupon?: string;
   metadata?: Record<string, any>;
   paidAt?: Date;
   createdAt: Date;
@@ -61,6 +62,9 @@ const paymentSchema = new mongoose.Schema({
   },
   installmentNumber: {
     type: Number,
+  },
+  coupon: {
+    type: String,
   },
   metadata: {
     type: mongoose.Schema.Types.Mixed,

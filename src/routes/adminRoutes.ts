@@ -8,6 +8,7 @@ import {
   generatePaymentLinkForUser,
   sendMessageToUser,
   createUser,
+  getSoldTickets,
 } from "../controllers/adminController.js";
 import {
   getCurrentAdmin,
@@ -203,7 +204,7 @@ router.post("/payment-link", generatePaymentLinkForUser);
  * /admin/send-message:
  *   post:
  *     summary: Send message to a user (Admin only)
- *     description: Send a WhatsApp message to a specific user with optional image attachment
+ *     description: Send a WhatsApp message to a specific user with optional image attachment and record as a ticket sale
  *     tags: [Admin]
  *     security:
  *       - BearerAuth: []
@@ -229,6 +230,18 @@ router.post("/payment-link", generatePaymentLinkForUser);
  *                 type: string
  *                 format: binary
  *                 description: Optional image file to send (jpeg, jpg, png, gif, webp, max 5MB)
+ *               isTicket:
+ *                 type: boolean
+ *                 description: Whether this message should be recorded as a ticket sale
+ *                 example: true
+ *               ticketType:
+ *                 type: string
+ *                 description: Type of ticket (required if isTicket is true)
+ *                 example: "VIP"
+ *               price:
+ *                 type: number
+ *                 description: Price of the ticket (required if isTicket is true)
+ *                 example: 500
  *     responses:
  *       200:
  *         description: Message sent successfully
@@ -290,6 +303,102 @@ router.post("/send-message", uploadImage.single("image"), sendMessageToUser);
  *         description: Server error
  */
 router.post("/users", createUser);
+
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     SoldTicket:
+ *       type: object
+ *       properties:
+ *         _id:
+ *           type: string
+ *         userId:
+ *           type: object
+ *           properties:
+ *             _id:
+ *               type: string
+ *             name:
+ *               type: string
+ *             email:
+ *               type: string
+ *             phoneNumber:
+ *               type: string
+ *         chatId:
+ *           type: string
+ *         userEmail:
+ *           type: string
+ *         ticketType:
+ *           type: string
+ *         price:
+ *           type: number
+ *         imageUrl:
+ *           type: string
+ *         location:
+ *           type: string
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ */
+
+/**
+ * @swagger
+ * /admin/sold-tickets:
+ *   get:
+ *     summary: Get all sold tickets (Admin only)
+ *     description: Returns paginated list of all tickets sent to users via the admin panel
+ *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *       - in: query
+ *         name: chatId
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: ticketType
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Sold tickets retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     tickets:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/SoldTicket'
+ *                     pagination:
+ *                       type: object
+ *                       properties:
+ *                         page:
+ *                           type: number
+ *                         limit:
+ *                           type: number
+ *                         total:
+ *                           type: number
+ *                         totalPages:
+ *                           type: number
+ */
+router.get("/sold-tickets", getSoldTickets);
 
 /**
  * Admin Management Routes

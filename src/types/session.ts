@@ -14,6 +14,9 @@ export interface UserSession {
   installmentNumber?: number;
   totalInstallments?: number;
   walletBalance?: number;
+  appliedCoupon?: string;
+  originalPrice?: number;
+  discountedPrice?: number;
   reminders?: {
     fiveDaySent?: boolean;
     oneDaySent?: boolean;
@@ -30,6 +33,9 @@ export type SessionState =
   | "SELECT_PAYMENT_TYPE"
   | "SELECT_INSTALLMENT_PLAN"
   | "AWAITING_EMAIL"
+  | "AWAITING_COUPON_ANSWER"
+  | "AWAITING_COUPON_CODE"
+  | "AWAITING_CONTINUE_ANSWER"
   | "AWAITING_PAYMENT"
   | "WALLET_TRANSFER";
 

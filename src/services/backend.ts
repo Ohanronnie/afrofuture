@@ -19,6 +19,7 @@ export const backend = {
       ticketType?: "GA" | "VIP";
       paymentType?: "full" | "installment";
       installmentNumber?: number;
+      coupon?: string;
     }
   ): Promise<{ paymentLink: string; reference: string }> {
     try {
@@ -64,6 +65,7 @@ export const backend = {
         ticketType: metadata?.ticketType,
         paymentType: metadata?.paymentType,
         installmentNumber: metadata?.installmentNumber,
+        coupon: metadata?.coupon,
         metadata,
       });
       await payment.save();

@@ -1,4 +1,6 @@
 import type { Request, Response } from "express";
+import path from "path";
+import fs from "fs";
 import { z } from "zod";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
@@ -8,6 +10,7 @@ import { backend } from "../services/backend.js";
 import { User } from "../models/User.js";
 import { Payment } from "../models/Payment.js";
 import { Admin } from "../models/Admin.js";
+import { SoldTicket } from "../models/SoldTicket.js";
 import { getSession } from "../utils/session.js";
 import type { UserSession } from "../types/session.js";
 import { TICKETS } from "../config/constants.js";
@@ -29,6 +32,11 @@ const generatePaymentLinkSchema = z.object({
 const sendMessageSchema = z.object({
   chatId: z.string().min(1, "Chat ID is required"),
   message: z.string().min(1, "Message is required"),
+  isTicket: z
+    .preprocess((val) => val === "true" || val === true, z.boolean())
+    .optional(),
+  ticketType: z.string().optional(),
+  price: z.preprocess((val) => Number(val), z.number()).optional(),
 });
 
 /**
@@ -459,7 +467,7 @@ export const generatePaymentLinkForUser = async (
 export const sendMessageToUser = async (req: Request, res: Response) => {
   try {
     const validatedData = sendMessageSchema.parse(req.body);
-    const { chatId, message } = validatedData;
+    const { chatId, message, isTicket, ticketType, price } = validatedData;
 
     // Check if user exists
     const user = await User.findOne({ chatId });
@@ -491,7 +499,40 @@ export const sendMessageToUser = async (req: Request, res: Response) => {
       // Send image with caption (message)
       await client.sendMessage(chatId, media, { caption: message });
 
-      // Clean up uploaded file
+      // Handle ticket recording if applicable
+      if (isTicket) {
+        if (!ticketType || !price) {
+          return res.status(400).json({
+            status: "error",
+            message: "Ticket type and price are required for tickets",
+          });
+        }
+
+        // Create sold ticket record
+        await SoldTicket.create({
+          userId: user._id,
+          chatId: user.chatId,
+          userEmail: user.email,
+          ticketType,
+          price,
+          imageUrl: file.filename, // Store ONLY the filename as requested
+          location: "local",
+        });
+
+        // DO NOT unlink the file if it's a ticket record
+        return res.json({
+          status: "success",
+          data: {
+            message: "Ticket message sent and recorded successfully",
+            chatId,
+            userName: user.name,
+            imageUploaded: true,
+            isTicket: true,
+          },
+        });
+      }
+
+      // Clean up uploaded file for non-ticket messages
       await fs.unlink(file.path);
 
       return res.json({
@@ -501,19 +542,42 @@ export const sendMessageToUser = async (req: Request, res: Response) => {
           chatId,
           userName: user.name,
           imageUploaded: true,
+          isTicket: false,
         },
       });
     } else {
       // Send text message only
       await client.sendMessage(chatId, message);
 
+      // Handle ticket recording even without image (if possible, but usually images are sent)
+      if (isTicket) {
+        if (!ticketType || !price) {
+          return res.status(400).json({
+            status: "error",
+            message: "Ticket type and price are required for tickets",
+          });
+        }
+
+        await SoldTicket.create({
+          userId: user._id,
+          chatId: user.chatId,
+          userEmail: user.email,
+          ticketType,
+          price,
+          location: "text-only",
+        });
+      }
+
       return res.json({
         status: "success",
         data: {
-          message: "Message sent successfully",
+          message: isTicket
+            ? "Ticket message sent and recorded successfully"
+            : "Message sent successfully",
           chatId,
           userName: user.name,
           imageUploaded: false,
+          isTicket: !!isTicket,
         },
       });
     }
@@ -602,6 +666,54 @@ export const createUser = async (req: Request, res: Response) => {
     res.status(500).json({
       status: "error",
       message: error.message || "Failed to create user",
+    });
+  }
+};
+
+/**
+ * Get all sold tickets (Admin only)
+ */
+export const getSoldTickets = async (req: Request, res: Response) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const skip = (page - 1) * limit;
+
+    const filter: any = {};
+    // if for a particular user
+    if (req.query.chatId) {
+      filter.chatId = req.query.chatId;
+    }
+
+    if (req.query.ticketType) {
+      filter.ticketType = req.query.ticketType;
+    }
+
+    const soldTickets = await SoldTicket.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .skip(skip)
+      .populate("userId", "name email phoneNumber");
+
+    const total = await SoldTicket.countDocuments(filter);
+
+    res.json({
+      status: "success",
+      data: {
+        tickets: soldTickets,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      },
+    });
+  } catch (error: any) {
+    console.error("Error fetching sold tickets:", error);
+    res.status(500).json({
+      status: "error",
+      message: error.message || "Failed to fetch sold tickets",
     });
   }
 };

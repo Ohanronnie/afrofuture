@@ -9,7 +9,9 @@ import ticketRoutes from "./routes/ticketRoutes.js";
 import paymentDashboardRoutes from "./routes/paymentDashboardRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
 import reminderRoutes from "./routes/reminderRoutes.js";
+import couponRoutes from "./routes/couponRoutes.js";
 import cors from "cors";
+import path from "path";
 
 const app = express();
 
@@ -89,10 +91,42 @@ const swaggerOptions = {
         name: "Payments",
         description: "Payment dashboard and statistics endpoints",
       },
+      {
+        name: "Coupons",
+        description: "Coupon and discount management",
+      },
+      {
+        name: "Static Files",
+        description: "Access uploaded images and assets",
+      },
     ],
   },
   apis: ["./src/routes/*.ts", "./src/server.ts"],
 };
+
+/**
+ * @swagger
+ * /uploads/{path}:
+ *   get:
+ *     summary: Access uploaded files
+ *     description: Retrieve any uploaded file (images, etc) using its path. Example /uploads/admin-messages/filename.jpg
+ *     tags: [Static Files]
+ *     parameters:
+ *       - in: path
+ *         name: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Relative path to the file within the uploads folder
+ *     responses:
+ *       200:
+ *         description: The file content
+ *         content:
+ *           image/*:
+ *             schema:
+ *               type: string
+ *               format: binary
+ */
 
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 
@@ -104,7 +138,6 @@ app.get("/", (req, res) => {
   res.redirect("/api-docs");
 });
 
-// allow cors
 app.use(
   cors({
     // allow all origins
@@ -113,6 +146,9 @@ app.use(
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
+
+// Serve static files from uploads directory
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 // Routes
 app.use("/broadcast", broadcastRoutes); // POST /broadcast (backward compatibility)
@@ -124,6 +160,7 @@ app.use("/admin/tickets", ticketRoutes); // Ticket management routes (requires a
 app.use("/admin/payments", paymentDashboardRoutes); // Payment dashboard routes (requires authentication)
 app.use("/admin/dashboard", dashboardRoutes); // Dashboard overview routes (requires authentication) - NEW API
 app.use("/admin/reminders", reminderRoutes); // Reminder management routes (requires authentication)
+app.use("/admin/coupons", couponRoutes); // Coupon management routes (requires authentication)
 
 export const startServer = (port: number = 3000) => {
   console.log(`[DEBUG] Starting Express server on port ${port}...`);

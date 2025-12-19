@@ -10,7 +10,12 @@ import { getWelcomeMessage } from "../messages/welcome.js";
 import { handleError } from "../errors/errorHandler.js";
 import { handleMainMenu } from "./menu.js";
 import { handleTicketSelection } from "./ticket.js";
-import { handleEmailCollection } from "./payment.js";
+import {
+  handleEmailCollection,
+  handleCouponAnswer,
+  handleCouponCode,
+  handleContinueAnswer,
+} from "./payment.js";
 import { handleInstallmentPlanSelection } from "./installment.js";
 import { handleWalletTransfer } from "./wallet.js";
 
@@ -63,6 +68,21 @@ export async function handleMessage(
 
       case SESSION_STATES.AWAITING_EMAIL:
         await handleEmailCollection(message, userMessage, session);
+        await updateSession(chatId, session);
+        break;
+
+      case SESSION_STATES.AWAITING_COUPON_ANSWER:
+        await handleCouponAnswer(message, userMessage, session);
+        await updateSession(chatId, session);
+        break;
+
+      case SESSION_STATES.AWAITING_COUPON_CODE:
+        await handleCouponCode(message, userMessage, session);
+        await updateSession(chatId, session);
+        break;
+
+      case SESSION_STATES.AWAITING_CONTINUE_ANSWER:
+        await handleContinueAnswer(message, userMessage, session);
         await updateSession(chatId, session);
         break;
 
