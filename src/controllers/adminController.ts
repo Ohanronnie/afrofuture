@@ -303,6 +303,7 @@ export const getUserInfo = async (req: Request, res: Response) => {
         user: {
           chatId: user.chatId,
           name: user.name,
+          email: user.email,
           phoneNumber: user.phoneNumber,
           createdAt: user.createdAt,
           updatedAt: user.updatedAt,
@@ -446,33 +447,29 @@ export const sendMessageToUser = async (req: Request, res: Response) => {
     }
 
     // Check if image was uploaded
-    const file = (req as any).file as Express.Multer.File | undefined;
+    const file = (req as any).file as any;
 
     if (file) {
       // Send image with caption
       const { MessageMedia } = await import("whatsapp-web.js");
       const fs = await import("fs/promises");
-      
+
       // Read the uploaded file
       const imageBuffer = await fs.readFile(file.path);
       const base64Image = imageBuffer.toString("base64");
-      
+
       // Determine mimetype
       const mimeType = file.mimetype;
-      
+
       // Create MessageMedia object
-      const media = new MessageMedia(
-        mimeType,
-        base64Image,
-        file.originalname
-      );
-      
+      const media = new MessageMedia(mimeType, base64Image, file.originalname);
+
       // Send image with caption (message)
       await client.sendMessage(chatId, media, { caption: message });
-      
+
       // Clean up uploaded file
       await fs.unlink(file.path);
-      
+
       return res.json({
         status: "success",
         data: {
@@ -485,7 +482,7 @@ export const sendMessageToUser = async (req: Request, res: Response) => {
     } else {
       // Send text message only
       await client.sendMessage(chatId, message);
-      
+
       return res.json({
         status: "success",
         data: {
