@@ -47,58 +47,68 @@ export const adminLogin = async (req: Request, res: Response) => {
     const validatedData = loginSchema.parse(req.body);
     const { email, password } = validatedData;
 
-    // Check if admin credentials are configured
-    if (!env.adminEmail || !env.adminPassword || !env.jwtSecret) {
+    // Check if JWT secret is configured
+    if (!env.jwtSecret) {
       return res.status(500).json({
         status: "error",
-        message: "Admin credentials not configured",
+        message: "JWT secret not configured",
       });
     }
 
-    // Verify email
-    if (email !== env.adminEmail) {
-      return res.status(401).json({
-        status: "error",
-        message: "Invalid credentials",
-      });
-    }
+    // First, try to find admin in database
+    let adminInfo = await Admin.findOne({ email: email.toLowerCase().trim() });
 
-    // Get or create admin in database
-    let adminInfo = await Admin.findOne({ email: env.adminEmail });
-
-    if (!adminInfo) {
-      // Create default admin if doesn't exist
-      const hashedPassword = await bcrypt.hash(password, 10);
-      adminInfo = await Admin.create({
-        email: env.adminEmail,
-        password: hashedPassword,
-        name: env.adminEmail.split("@")[0] || "Admin",
-        role: "super_admin",
-        isActive: true,
-      });
-    } else {
-      // Verify password
+    if (adminInfo) {
+      // Admin exists in database - verify password
       const isValidPassword = await bcrypt.compare(
         password,
         adminInfo.password
       );
       if (!isValidPassword) {
-        // Also check against env password for backward compatibility
-        const envHashedPassword = getHashedAdminPassword();
-        const isValidEnvPassword = await bcrypt.compare(
-          password,
-          envHashedPassword
-        );
-        if (!isValidEnvPassword) {
-          return res.status(401).json({
-            status: "error",
-            message: "Invalid credentials",
-          });
-        }
-        // Update password in database if env password was used
-        adminInfo.password = await bcrypt.hash(password, 10);
-        await adminInfo.save();
+        return res.status(401).json({
+          status: "error",
+          message: "Invalid credentials",
+        });
       }
+    } else {
+      // Admin not found in database - check if it's the default env admin
+      if (!env.adminEmail || !env.adminPassword) {
+        return res.status(401).json({
+          status: "error",
+          message: "Invalid credentials",
+        });
+      }
+
+      // Check if email matches env admin email
+      if (email.toLowerCase().trim() !== env.adminEmail.toLowerCase().trim()) {
+        return res.status(401).json({
+          status: "error",
+          message: "Invalid credentials",
+        });
+      }
+
+      // Verify password against env password
+      const envHashedPassword = getHashedAdminPassword();
+      const isValidEnvPassword = await bcrypt.compare(
+        password,
+        envHashedPassword
+      );
+      if (!isValidEnvPassword) {
+        return res.status(401).json({
+          status: "error",
+          message: "Invalid credentials",
+        });
+      }
+
+      // Create default admin in database if doesn't exist
+      const hashedPassword = await bcrypt.hash(password, 10);
+      adminInfo = await Admin.create({
+        email: env.adminEmail.toLowerCase().trim(),
+        password: hashedPassword,
+        name: env.adminEmail.split("@")[0] || "Admin",
+        role: "super_admin",
+        isActive: true,
+      });
     }
 
     // Check if admin is active
