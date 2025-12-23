@@ -93,8 +93,8 @@ client.on("ready", async () => {
   
   // Ensure display name is set on ready/reconnect
   try {
-    await client.setDisplayName("AfroFuture Bot");
-    console.log("[DEBUG] Bot display name verified/updated");
+    await client.setDisplayName("AfroFuture Bot🤖");
+    console.log("[DEBUG] Bot display name verified/updated to 'AfroFuture Bot🤖'");
   } catch (error) {
     console.error("[DEBUG] Failed to set display name:", error);
   }

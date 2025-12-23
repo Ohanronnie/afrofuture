@@ -44,7 +44,17 @@ client.on("ready", async () => {
   // Set the bot's display name
   try {
     await client.setDisplayName("AfroFuture Bot🤖");
-    console.log("✅ Bot display name set to 'AfroFuture Bot'");
+    console.log("✅ Bot display name set to 'AfroFuture Bot🤖'");
+    
+    // Verify the display name was set
+    try {
+      const info = await client.info;
+      if (info?.pushname) {
+        console.log(`✅ Verified display name: ${info.pushname}`);
+      }
+    } catch (verifyError) {
+      console.log("⚠️  Could not verify display name (this is normal)");
+    }
   } catch (error) {
     console.error("⚠️  Failed to set bot display name:", error);
   }

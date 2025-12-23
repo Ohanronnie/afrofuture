@@ -8,8 +8,9 @@ import * as XLSX from "xlsx";
 import * as fs from "fs/promises";
 import * as path from "path";
 
-const BATCH_SIZE = 10;
+const BATCH_SIZE = 20;
 const BATCH_DELAY_MS = 1000;
+const RATE_LIMIT_DELAY_MS = 5000;
 
 function normalizePhoneNumber(phone: string): string | null {
   if (!phone) return null;
@@ -205,11 +206,14 @@ async function sendBatchMessages(
 
   for (let i = 0; i < phoneNumbers.length; i += BATCH_SIZE) {
     const batch = phoneNumbers.slice(i, i + BATCH_SIZE);
+    const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
+    const totalBatches = Math.ceil(phoneNumbers.length / BATCH_SIZE);
     console.log(
-      `Processing batch ${Math.floor(i / BATCH_SIZE) + 1}, numbers:`,
+      `Processing batch ${batchNumber}/${totalBatches}, numbers:`,
       batch
     );
 
+    let batchRateLimited = false;
     const batchResults = await Promise.allSettled(
       batch.map(async (chatId) => {
         try {
@@ -220,6 +224,17 @@ async function sendBatchMessages(
         } catch (error: any) {
           const errorMsg = String(error?.message || error).toLowerCase();
           const errorString = String(error || "");
+
+          if (
+            errorMsg.includes("rate limit") ||
+            errorMsg.includes("too many requests") ||
+            errorMsg.includes("429") ||
+            errorString.includes("rate limit")
+          ) {
+            console.log(`Rate limit detected for ${chatId}`);
+            batchRateLimited = true;
+            return { status: "rate_limited", chatId };
+          }
 
           if (
             errorMsg.includes("not registered") ||
@@ -250,6 +265,9 @@ async function sendBatchMessages(
           counters.sent++;
         } else if (result.value.status === "failed") {
           counters.failed++;
+        } else if (result.value.status === "rate_limited") {
+          counters.failed++;
+          batchRateLimited = true;
         } else {
           counters.skipped++;
         }
@@ -258,8 +276,19 @@ async function sendBatchMessages(
       }
     }
 
+    broadcast.sentCount = counters.sent;
+    broadcast.failedCount = counters.failed;
+    broadcast.skippedCount = counters.skipped;
+    await broadcast.save();
+
     if (i + BATCH_SIZE < phoneNumbers.length) {
-      await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
+      const delay = batchRateLimited ? RATE_LIMIT_DELAY_MS : BATCH_DELAY_MS;
+      if (batchRateLimited) {
+        console.log(
+          `Rate limit detected, waiting ${delay}ms before next batch`
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
 
     broadcast.sentCount = counters.sent;
