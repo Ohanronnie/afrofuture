@@ -1,5 +1,8 @@
 import type { Request, Response } from "express";
-import { ExcelBroadcast, type IExcelBroadcast } from "../models/ExcelBroadcast.js";
+import {
+  ExcelBroadcast,
+  type IExcelBroadcast,
+} from "../models/ExcelBroadcast.js";
 import { client } from "../config/client.js";
 import * as XLSX from "xlsx";
 import * as fs from "fs/promises";
@@ -10,35 +13,96 @@ const BATCH_DELAY_MS = 1000;
 
 function normalizePhoneNumber(phone: string): string | null {
   if (!phone) return null;
-  
-  let cleaned = phone.toString().trim().replace(/\D/g, "");
-  
+
+  const original = phone.toString().trim();
+  let cleaned = original;
+
   if (cleaned.length === 0) return null;
-  
+
+  cleaned = cleaned.replace(/\D/g, "");
+
+  if (cleaned.length === 0) {
+    console.log(`Invalid phone number (empty after cleaning): ${original}`);
+    return null;
+  }
+
+  const beforeNormalization = cleaned;
+
   if (cleaned.startsWith("0")) {
     cleaned = "233" + cleaned.substring(1);
-  } else if (!cleaned.startsWith("233")) {
+  } else if (cleaned.startsWith("233")) {
+    cleaned = cleaned;
+  } else if (cleaned.length >= 9 && cleaned.length <= 10) {
     cleaned = "233" + cleaned;
+  } else if (cleaned.length >= 11 && cleaned.length <= 15) {
+    cleaned = cleaned;
+  } else {
+    console.log(
+      `Invalid phone number format (length ${cleaned.length}): ${original} -> ${cleaned}`
+    );
+    return null;
   }
-  
-  return cleaned + "@c.us";
+
+  if (cleaned.length < 10 || cleaned.length > 15) {
+    console.log(
+      `Invalid phone number length (${cleaned.length}): ${original} -> ${cleaned}`
+    );
+    return null;
+  }
+
+  const result = cleaned + "@c.us";
+  console.log(
+    `Normalized phone: ${original} -> ${beforeNormalization} -> ${cleaned} -> ${result}`
+  );
+  return result;
 }
 
-async function isWhatsAppNumber(chatId: string): Promise<boolean> {
-  try {
-    const numberId = chatId.replace("@c.us", "");
-    try {
-      const contact = await client.getNumberId(numberId);
-      return contact !== null && contact !== undefined;
-    } catch (error) {
-      return false;
+function convertScientificNotation(value: any): string {
+  if (typeof value === "number") {
+    return value.toString();
+  }
+
+  const str = String(value).trim();
+
+  if (
+    str.includes("E+") ||
+    str.includes("e+") ||
+    str.includes("E-") ||
+    str.includes("e-")
+  ) {
+    const num = parseFloat(str);
+    if (!isNaN(num)) {
+      return num.toFixed(0);
     }
-  } catch (error) {
+  }
+
+  return str;
+}
+
+async function ensureClientReady(): Promise<boolean> {
+  try {
+    let state: string;
+    try {
+      state = client.info ? "READY" : (await client.getState()).toString();
+    } catch (error) {
+      state = "UNKNOWN";
+    }
+
+    if (state === "READY" || state === "CONNECTED") {
+      return true;
+    }
+    console.log(`WhatsApp client not ready, state: ${state}`);
+    return false;
+  } catch (error: any) {
+    console.log(`Error checking client state: ${error?.message || error}`);
     return false;
   }
 }
 
-async function parseExcelFile(filePath: string, phoneColumn: string): Promise<string[]> {
+async function parseExcelFile(
+  filePath: string,
+  phoneColumn: string
+): Promise<string[]> {
   const fileExtension = path.extname(filePath).toLowerCase();
   let phoneNumbers: string[] = [];
 
@@ -47,7 +111,10 @@ async function parseExcelFile(filePath: string, phoneColumn: string): Promise<st
     const lines = content.split("\n");
     if (lines.length === 0) return phoneNumbers;
 
-    const headers = lines[0].split(",").map((h) => h.trim());
+    const firstLine = lines[0];
+    if (!firstLine) return phoneNumbers;
+
+    const headers = firstLine.split(",").map((h) => h.trim());
     const phoneColumnIndex = headers.findIndex(
       (h) => h.toLowerCase() === phoneColumn.toLowerCase()
     );
@@ -57,23 +124,44 @@ async function parseExcelFile(filePath: string, phoneColumn: string): Promise<st
     }
 
     for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(",");
-      if (values[phoneColumnIndex]) {
-        const phone = normalizePhoneNumber(values[phoneColumnIndex]);
-        if (phone) {
-          phoneNumbers.push(phone);
+      const line = lines[i];
+      if (!line) continue;
+
+      const values = line.split(",");
+      if (values[phoneColumnIndex] !== undefined) {
+        const rawValue = values[phoneColumnIndex]?.trim() || "";
+        if (rawValue) {
+          const converted = convertScientificNotation(rawValue);
+          const phone = normalizePhoneNumber(converted);
+          if (phone) {
+            phoneNumbers.push(phone);
+          }
         }
       }
     }
   } else {
     const workbook = XLSX.readFile(filePath);
+    if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+      throw new Error("Excel file has no sheets");
+    }
+
     const sheetName = workbook.SheetNames[0];
+    if (!sheetName) {
+      throw new Error("Excel file has no valid sheet");
+    }
+
     const worksheet = workbook.Sheets[sheetName];
-    const data = XLSX.utils.sheet_to_json(worksheet, { raw: false });
+    if (!worksheet) {
+      throw new Error(`Sheet "${sheetName}" not found in Excel file`);
+    }
+
+    const data = XLSX.utils.sheet_to_json(worksheet, { raw: true, defval: "" });
 
     if (data.length === 0) return phoneNumbers;
 
     const firstRow = data[0] as Record<string, any>;
+    if (!firstRow) return phoneNumbers;
+
     const columnKeys = Object.keys(firstRow);
     const phoneColumnKey = columnKeys.find(
       (key) => key.toLowerCase() === phoneColumn.toLowerCase()
@@ -84,9 +172,13 @@ async function parseExcelFile(filePath: string, phoneColumn: string): Promise<st
     }
 
     for (const row of data) {
-      const phone = normalizePhoneNumber((row as Record<string, any>)[phoneColumnKey]);
-      if (phone) {
-        phoneNumbers.push(phone);
+      const rawValue = (row as Record<string, any>)[phoneColumnKey];
+      if (rawValue !== undefined && rawValue !== null && rawValue !== "") {
+        const converted = convertScientificNotation(rawValue);
+        const phone = normalizePhoneNumber(converted);
+        if (phone) {
+          phoneNumbers.push(phone);
+        }
       }
     }
   }
@@ -101,21 +193,53 @@ async function sendBatchMessages(
 ): Promise<{ sent: number; failed: number; skipped: number }> {
   const counters = { sent: 0, failed: 0, skipped: 0 };
 
+  const isReady = await ensureClientReady();
+  if (!isReady) {
+    throw new Error(
+      "WhatsApp client is not ready. Please ensure the bot is connected and authenticated."
+    );
+  }
+
+  console.log(`Starting to send messages to ${phoneNumbers.length} numbers`);
+  console.log(`Sample numbers:`, phoneNumbers.slice(0, 3));
+
   for (let i = 0; i < phoneNumbers.length; i += BATCH_SIZE) {
     const batch = phoneNumbers.slice(i, i + BATCH_SIZE);
+    console.log(
+      `Processing batch ${Math.floor(i / BATCH_SIZE) + 1}, numbers:`,
+      batch
+    );
+
     const batchResults = await Promise.allSettled(
       batch.map(async (chatId) => {
         try {
-          const isRegistered = await isWhatsAppNumber(chatId);
-          if (!isRegistered) {
+          console.log(`Sending message to ${chatId}`);
+          await client.sendMessage(chatId, message);
+          console.log(`Successfully sent to ${chatId}`);
+          return { status: "sent", chatId };
+        } catch (error: any) {
+          const errorMsg = String(error?.message || error).toLowerCase();
+          const errorString = String(error || "");
+
+          if (
+            errorMsg.includes("not registered") ||
+            errorMsg.includes("invalid number") ||
+            errorMsg.includes("number not on whatsapp") ||
+            errorMsg.includes("phone number not registered") ||
+            errorMsg.includes("chat not found") ||
+            errorString.includes("WidFactory") ||
+            errorString.includes("getChat")
+          ) {
+            console.log(
+              `Skipping ${chatId} - not registered on WhatsApp or invalid number`
+            );
             return { status: "skipped", chatId };
           }
-
-          await client.sendMessage(chatId, message);
-          return { status: "sent", chatId };
-        } catch (error) {
-          console.error(`Failed to send to ${chatId}:`, error);
-          return { status: "failed", chatId };
+          console.error(
+            `Failed to send to ${chatId}:`,
+            error?.message || error
+          );
+          return { status: "failed", chatId, error: error?.message };
         }
       })
     );
@@ -175,7 +299,8 @@ export const createExcelBroadcast = async (req: Request, res: Response) => {
       await fs.unlink(filePath).catch(() => {});
       return res.status(400).json({
         status: "error",
-        message: error instanceof Error ? error.message : "Failed to parse Excel file",
+        message:
+          error instanceof Error ? error.message : "Failed to parse Excel file",
       });
     }
 
@@ -202,7 +327,11 @@ export const createExcelBroadcast = async (req: Request, res: Response) => {
         broadcast.status = "processing";
         await broadcast.save();
 
-        const result = await sendBatchMessages(phoneNumbers, message.trim(), broadcast);
+        const result = await sendBatchMessages(
+          phoneNumbers,
+          message.trim(),
+          broadcast
+        );
 
         broadcast.status = "sent";
         broadcast.executedAt = new Date();
@@ -327,5 +456,3 @@ export const getExcelBroadcast = async (req: Request, res: Response) => {
     });
   }
 };
-
-
