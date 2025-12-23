@@ -82,13 +82,21 @@ client.on("message", async (message: Message) => {
 });
 
 // Initialize schedulers when client is ready
-client.on("ready", () => {
+client.on("ready", async () => {
   console.log("[DEBUG] Ready event - initializing schedulers...");
   try {
     initializeSchedulers(client);
     console.log("[DEBUG] Schedulers initialized");
   } catch (error) {
     console.error("[DEBUG] Error initializing schedulers:", error);
+  }
+  
+  // Ensure display name is set on ready/reconnect
+  try {
+    await client.setDisplayName("AfroFuture Bot");
+    console.log("[DEBUG] Bot display name verified/updated");
+  } catch (error) {
+    console.error("[DEBUG] Failed to set display name:", error);
   }
 });
 

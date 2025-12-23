@@ -37,9 +37,18 @@ client.on("loading_screen", (percent, message) => {
 });
 
 // Client ready
-client.on("ready", () => {
+client.on("ready", async () => {
   console.log("[DEBUG] Client ready event fired");
   console.log("✅ AfroFuture 2025 Bot is ready!");
+
+  // Set the bot's display name
+  try {
+    await client.setDisplayName("AfroFuture Bot🤖");
+    console.log("✅ Bot display name set to 'AfroFuture Bot'");
+  } catch (error) {
+    console.error("⚠️  Failed to set bot display name:", error);
+  }
+
   console.log("📱 Waiting for messages...\n");
 });
 
