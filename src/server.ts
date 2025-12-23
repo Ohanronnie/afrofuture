@@ -10,8 +10,10 @@ import paymentDashboardRoutes from "./routes/paymentDashboardRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
 import reminderRoutes from "./routes/reminderRoutes.js";
 import couponRoutes from "./routes/couponRoutes.js";
+import excelBroadcastRoutes from "./routes/excelBroadcastRoutes.js";
 import cors from "cors";
 import path from "path";
+import { mkdir } from "fs/promises";
 
 const app = express();
 
@@ -147,6 +149,18 @@ app.use(
   })
 );
 
+// Ensure uploads directories exist
+const ensureUploadsDirs = async () => {
+  const uploadsDir = path.join(process.cwd(), "uploads");
+  const excelBroadcastsDir = path.join(uploadsDir, "excel-broadcasts");
+  try {
+    await mkdir(excelBroadcastsDir, { recursive: true });
+  } catch (error) {
+    console.error("Failed to create uploads directories:", error);
+  }
+};
+ensureUploadsDirs();
+
 // Serve static files from uploads directory
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
@@ -161,6 +175,7 @@ app.use("/admin/payments", paymentDashboardRoutes); // Payment dashboard routes 
 app.use("/admin/dashboard", dashboardRoutes); // Dashboard overview routes (requires authentication) - NEW API
 app.use("/admin/reminders", reminderRoutes); // Reminder management routes (requires authentication)
 app.use("/admin/coupons", couponRoutes); // Coupon management routes (requires authentication)
+app.use("/admin/excel-broadcasts", excelBroadcastRoutes); // Excel broadcast routes (requires authentication)
 
 export const startServer = (port: number = 3000) => {
   console.log(`[DEBUG] Starting Express server on port ${port}...`);
