@@ -89,9 +89,28 @@ client.on("remote_session_saved", () => {
 });
 
 // Error handling
-client.on("error", (error) => {
+client.on("error", async (error) => {
   console.error("[DEBUG] Client error event fired");
   console.error("❌ WhatsApp client error:", error);
+  
+  const errorMsg = String(error?.message || error || "").toLowerCase();
+  if (
+    errorMsg.includes("registrationutils") ||
+    errorMsg.includes("widfactory") ||
+    errorMsg.includes("getchat") ||
+    errorMsg.includes("evaluation failed")
+  ) {
+    console.log("⚠️  Critical WhatsApp Web.js error detected. Attempting recovery...");
+    try {
+      await client.destroy();
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      console.log("🔄 Reinitializing WhatsApp client...");
+      await client.initialize();
+    } catch (recoveryError) {
+      console.error("❌ Recovery failed:", recoveryError);
+      console.log("💡 You may need to restart the bot manually or clear cache");
+    }
+  }
 });
 
 // Log when client is being initialized

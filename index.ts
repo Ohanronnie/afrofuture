@@ -155,6 +155,49 @@ try {
 
 startServer();
 
+// Handle uncaught exceptions and unhandled rejections
+process.on("uncaughtException", (error) => {
+  console.error("❌ Uncaught Exception:", error);
+  console.error("Stack:", error.stack);
+  
+  if (error.message?.includes("RegistrationUtils") || 
+      error.message?.includes("WidFactory") ||
+      error.message?.includes("getChat")) {
+    console.log("⚠️  WhatsApp Web.js internal error detected. Attempting to restart client...");
+    setTimeout(async () => {
+      try {
+        await client.destroy();
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await client.initialize();
+      } catch (restartError) {
+        console.error("❌ Failed to restart client:", restartError);
+      }
+    }, 5000);
+  }
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("❌ Unhandled Rejection at:", promise, "reason:", reason);
+  
+  if (reason && typeof reason === "object" && "message" in reason) {
+    const errorMsg = String((reason as any).message || "").toLowerCase();
+    if (errorMsg.includes("registrationutils") || 
+        errorMsg.includes("widfactory") ||
+        errorMsg.includes("getchat")) {
+      console.log("⚠️  WhatsApp Web.js internal error detected. Attempting to restart client...");
+      setTimeout(async () => {
+        try {
+          await client.destroy();
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          await client.initialize();
+        } catch (restartError) {
+          console.error("❌ Failed to restart client:", restartError);
+        }
+      }, 5000);
+    }
+  }
+});
+
 // Handle graceful shutdown
 process.on("SIGINT", async () => {
   console.log("\n⏹️  Shutting down bot...");
