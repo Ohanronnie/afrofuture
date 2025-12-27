@@ -147,7 +147,6 @@ app.use(
   })
 );
 
-
 // Serve static files from uploads directory
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 

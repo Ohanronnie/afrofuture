@@ -254,7 +254,36 @@ router.post("/payment-link", generatePaymentLinkForUser);
  *       500:
  *         description: Server error
  */
-router.post("/send-message", uploadImage.single("image"), sendMessageToUser);
+// Error handler for multer errors
+const handleMulterError = (err: any, req: Request, res: Response, next: any) => {
+  if (err) {
+    // Ensure JSON response
+    res.setHeader("Content-Type", "application/json");
+    
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(400).json({
+        status: "error",
+        message: "File too large. Maximum size is 5MB",
+      });
+    }
+    
+    if (err.message === "Only image files are allowed!") {
+      return res.status(400).json({
+        status: "error",
+        message: "Only image files are allowed (jpeg, jpg, png, gif, webp)",
+      });
+    }
+    
+    // Generic multer error
+    return res.status(400).json({
+      status: "error",
+      message: err.message || "File upload error",
+    });
+  }
+  next();
+};
+
+router.post("/send-message", uploadImage.single("image"), handleMulterError, sendMessageToUser);
 
 /**
  * @swagger

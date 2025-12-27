@@ -479,7 +479,24 @@ export const generatePaymentLinkForUser = async (
  */
 export const sendMessageToUser = async (req: Request, res: Response) => {
   try {
-    const validatedData = sendMessageSchema.parse(req.body);
+    // Ensure we always return JSON, even on errors
+    res.setHeader("Content-Type", "application/json");
+
+    // Validate request body
+    let validatedData;
+    try {
+      validatedData = sendMessageSchema.parse(req.body);
+    } catch (validationError) {
+      if (validationError instanceof z.ZodError) {
+        return res.status(400).json({
+          status: "error",
+          message: "Validation error",
+          errors: validationError.issues,
+        });
+      }
+      throw validationError;
+    }
+
     const { chatId, message, isTicket, ticketType, price } = validatedData;
 
     // Check if user exists
@@ -518,6 +535,13 @@ export const sendMessageToUser = async (req: Request, res: Response) => {
           return res.status(400).json({
             status: "error",
             message: "Ticket type and price are required for tickets",
+          });
+        }
+
+        if (!file) {
+          return res.status(400).json({
+            status: "error",
+            message: "Ticket image is required when sending a ticket",
           });
         }
 
@@ -562,7 +586,7 @@ export const sendMessageToUser = async (req: Request, res: Response) => {
       // Send text message only
       await client.sendMessage(chatId, message);
 
-      // Handle ticket recording even without image (if possible, but usually images are sent)
+      // Handle ticket recording - image is required for tickets
       if (isTicket) {
         if (!ticketType || !price) {
           return res.status(400).json({
@@ -571,13 +595,9 @@ export const sendMessageToUser = async (req: Request, res: Response) => {
           });
         }
 
-        await SoldTicket.create({
-          userId: user._id,
-          chatId: user.chatId,
-          userEmail: user.email,
-          ticketType,
-          price,
-          location: "text-only",
+        return res.status(400).json({
+          status: "error",
+          message: "Ticket image is required when sending a ticket",
         });
       }
 

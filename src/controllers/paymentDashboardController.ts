@@ -93,17 +93,21 @@ export const getPaymentHistory = async (req: Request, res: Response) => {
       .sort({ paidAt: -1, createdAt: -1 })
       .limit(limit)
       .skip(skip)
-      .select("chatId amount paidAt createdAt");
+      .select("_id chatId amount ticketType paidAt createdAt");
 
-    // Get user names for each payment
+    // Get user names and emails for each payment
     const paymentHistory = await Promise.all(
       payments.map(async (payment) => {
         const user = await User.findOne({ chatId: payment.chatId }).select(
-          "name"
+          "name email"
         );
         return {
+          _id: payment._id.toString(),
+          chatId: payment.chatId,
           userName: user?.name || "Unknown",
+          userEmail: user?.email || null,
           amount: payment.amount,
+          ticketType: payment.ticketType || null,
           paidAt: payment.paidAt || payment.createdAt,
         };
       })
