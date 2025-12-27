@@ -1,14 +1,46 @@
 import { Client, LocalAuth } from "whatsapp-web.js";
 
 // Store QR code securely in memory (not exposed in logs)
-let currentQRCode: string | null = null;
+// QR codes expire after 2 minutes for security
+const QR_CODE_EXPIRY_MS = 2 * 60 * 1000; // 2 minutes
+
+interface QRCodeData {
+  code: string;
+  timestamp: number;
+}
+
+let currentQRCode: QRCodeData | null = null;
 
 /**
  * Get the current QR code (for admin access only)
- * Returns null if no QR code is available (client is authenticated)
+ * Returns null if no QR code is available, expired, or client is authenticated
  */
 export function getQRCode(): string | null {
-  return currentQRCode;
+  if (!currentQRCode) {
+    return null;
+  }
+
+  // Check if QR code has expired
+  const age = Date.now() - currentQRCode.timestamp;
+  if (age > QR_CODE_EXPIRY_MS) {
+    // QR code expired, clear it
+    currentQRCode = null;
+    console.log("[SECURITY] QR code expired and cleared");
+    return null;
+  }
+
+  return currentQRCode.code;
+}
+
+/**
+ * Store a new QR code with timestamp
+ */
+export function setQRCode(code: string): void {
+  currentQRCode = {
+    code,
+    timestamp: Date.now(),
+  };
+  console.log("[SECURITY] New QR code stored (expires in 2 minutes)");
 }
 
 /**
@@ -43,9 +75,11 @@ console.log("[DEBUG] Setting up WhatsApp client event listeners...");
 // QR Code for authentication - Store securely instead of displaying
 client.on("qr", (qr) => {
   console.log("[DEBUG] QR code event received");
-  // Store QR code securely (not displayed in console/logs)
-  currentQRCode = qr;
-  console.log("🔳 QR code generated. Access it securely through the admin dashboard.");
+  // Store QR code securely with timestamp (not displayed in console/logs)
+  setQRCode(qr);
+  console.log(
+    "🔳 QR code generated. Access it securely through the admin dashboard (expires in 2 minutes)."
+  );
 });
 
 // Loading screen
@@ -63,7 +97,7 @@ client.on("ready", async () => {
   try {
     await client.setDisplayName("AfroFuture Bot🤖");
     console.log("✅ Bot display name set to 'AfroFuture Bot🤖'");
-    
+
     // Verify the display name was set
     try {
       const info = await client.info;
@@ -111,7 +145,7 @@ client.on("remote_session_saved", () => {
 client.on("error", async (error) => {
   console.error("[DEBUG] Client error event fired");
   console.error("❌ WhatsApp client error:", error);
-  
+
   const errorMsg = String(error?.message || error || "").toLowerCase();
   if (
     errorMsg.includes("registrationutils") ||
@@ -119,7 +153,9 @@ client.on("error", async (error) => {
     errorMsg.includes("getchat") ||
     errorMsg.includes("evaluation failed")
   ) {
-    console.log("⚠️  Critical WhatsApp Web.js error detected. Attempting recovery...");
+    console.log(
+      "⚠️  Critical WhatsApp Web.js error detected. Attempting recovery..."
+    );
     try {
       await client.destroy();
       await new Promise((resolve) => setTimeout(resolve, 3000));

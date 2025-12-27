@@ -248,7 +248,7 @@ export const getQRCodeEndpoint = async (req: Request, res: Response) => {
         data: {
           qrCode: null,
           isAuthenticated: false,
-          message: "QR code not available. Please wait or restart the bot.",
+          message: "QR code not available or expired. Please wait for a new QR code to be generated.",
         },
       });
     }
