@@ -1,8 +1,8 @@
 import { Client, LocalAuth } from "whatsapp-web.js";
 
 // Store QR code securely in memory (not exposed in logs)
-// QR codes expire after 2 minutes for security
-const QR_CODE_EXPIRY_MS = 2 * 60 * 1000; // 2 minutes
+// QR codes expire after 10 minutes for security
+const QR_CODE_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
 
 interface QRCodeData {
   code: string;
@@ -40,7 +40,7 @@ export function setQRCode(code: string): void {
     code,
     timestamp: Date.now(),
   };
-  console.log("[SECURITY] New QR code stored (expires in 2 minutes)");
+  console.log("[SECURITY] New QR code stored (expires in 10 minutes)");
 }
 
 /**
@@ -78,7 +78,7 @@ client.on("qr", (qr) => {
   // Store QR code securely with timestamp (not displayed in console/logs)
   setQRCode(qr);
   console.log(
-    "🔳 QR code generated. Access it securely through the admin dashboard (expires in 2 minutes)."
+    "🔳 QR code generated. Access it securely through the admin dashboard (expires in 10 minutes)."
   );
 });
 
