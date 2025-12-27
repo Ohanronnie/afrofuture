@@ -1,5 +1,22 @@
 import { Client, LocalAuth } from "whatsapp-web.js";
-import qrcode from "qrcode-terminal";
+
+// Store QR code securely in memory (not exposed in logs)
+let currentQRCode: string | null = null;
+
+/**
+ * Get the current QR code (for admin access only)
+ * Returns null if no QR code is available (client is authenticated)
+ */
+export function getQRCode(): string | null {
+  return currentQRCode;
+}
+
+/**
+ * Clear the stored QR code (called after authentication)
+ */
+export function clearQRCode(): void {
+  currentQRCode = null;
+}
 
 // Initialize WhatsApp client
 export const client = new Client({
@@ -23,12 +40,12 @@ export const client = new Client({
 // Debug: Log all client events
 console.log("[DEBUG] Setting up WhatsApp client event listeners...");
 
-// QR Code for authentication
+// QR Code for authentication - Store securely instead of displaying
 client.on("qr", (qr) => {
   console.log("[DEBUG] QR code event received");
-  console.log("\n🔳 Scan this QR code with WhatsApp:");
-  qrcode.generate(qr, { small: true });
-  console.log("[DEBUG] QR code displayed");
+  // Store QR code securely (not displayed in console/logs)
+  currentQRCode = qr;
+  console.log("🔳 QR code generated. Access it securely through the admin dashboard.");
 });
 
 // Loading screen
@@ -36,10 +53,11 @@ client.on("loading_screen", (percent, message) => {
   console.log(`[DEBUG] Loading: ${percent}% - ${message}`);
 });
 
-// Client ready
+// Client ready - Clear QR code when client becomes ready
 client.on("ready", async () => {
   console.log("[DEBUG] Client ready event fired");
   console.log("✅ AfroFuture 2025 Bot is ready!");
+  clearQRCode(); // Clear QR code when client is ready
 
   // Set the bot's display name
   try {
@@ -62,10 +80,11 @@ client.on("ready", async () => {
   console.log("📱 Waiting for messages...\n");
 });
 
-// Handle authentication
+// Handle authentication - Clear QR code after successful auth
 client.on("authenticated", () => {
   console.log("[DEBUG] Authenticated event fired");
   console.log("✅ Authenticated successfully!");
+  clearQRCode(); // Clear QR code after authentication
 });
 
 client.on("auth_failure", (msg) => {

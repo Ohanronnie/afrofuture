@@ -1,8 +1,10 @@
 import type { Request, Response } from "express";
 import mongoose from "mongoose";
 import { client } from "../config/client.js";
+import { getQRCode } from "../config/client.js";
 import { env } from "../config/env.js";
 import axios from "axios";
+import QRCode from "qrcode";
 
 /**
  * Get system health status
@@ -215,3 +217,63 @@ async function checkEmailServiceStatus(): Promise<{
     details: "Email service not configured",
   };
 }
+
+/**
+ * Get WhatsApp QR code for authentication (Admin only)
+ */
+export const getQRCodeEndpoint = async (req: Request, res: Response) => {
+  try {
+    const qrCodeString = getQRCode();
+    
+    if (!qrCodeString) {
+      // Check if client is already authenticated
+      try {
+        const state = await client.getState();
+        if (state === "READY" || state === "CONNECTED") {
+          return res.json({
+            status: "success",
+            data: {
+              qrCode: null,
+              isAuthenticated: true,
+              message: "WhatsApp client is already authenticated",
+            },
+          });
+        }
+      } catch (error) {
+        // Client state check failed
+      }
+      
+      return res.json({
+        status: "success",
+        data: {
+          qrCode: null,
+          isAuthenticated: false,
+          message: "QR code not available. Please wait or restart the bot.",
+        },
+      });
+    }
+
+    // Generate QR code as data URL for frontend display
+    const qrCodeDataUrl = await QRCode.toDataURL(qrCodeString, {
+      errorCorrectionLevel: "M",
+      type: "image/png",
+      width: 300,
+      margin: 2,
+    });
+
+    res.json({
+      status: "success",
+      data: {
+        qrCode: qrCodeDataUrl,
+        qrCodeString: qrCodeString, // Also provide raw string for alternative use
+        isAuthenticated: false,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error generating QR code:", error);
+    res.status(500).json({
+      status: "error",
+      message: error.message || "Failed to generate QR code",
+    });
+  }
+};
