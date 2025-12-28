@@ -508,25 +508,25 @@ export const sendMessageToUser = async (req: Request, res: Response) => {
       });
     }
 
-    // Check if image was uploaded
+    // Check if file was uploaded (image or PDF)
     const file = (req as any).file as any;
 
     if (file) {
-      // Send image with caption
+      // Send file (image or PDF) with caption
       const { MessageMedia } = await import("whatsapp-web.js");
       const fs = await import("fs/promises");
 
       // Read the uploaded file
-      const imageBuffer = await fs.readFile(file.path);
-      const base64Image = imageBuffer.toString("base64");
+      const fileBuffer = await fs.readFile(file.path);
+      const base64File = fileBuffer.toString("base64");
 
       // Determine mimetype
       const mimeType = file.mimetype;
 
       // Create MessageMedia object
-      const media = new MessageMedia(mimeType, base64Image, file.originalname);
+      const media = new MessageMedia(mimeType, base64File, file.originalname);
 
-      // Send image with caption (message)
+      // Send file with caption (message)
       await client.sendMessage(chatId, media, { caption: message });
 
       // Handle ticket recording if applicable
@@ -541,7 +541,7 @@ export const sendMessageToUser = async (req: Request, res: Response) => {
         if (!file) {
           return res.status(400).json({
             status: "error",
-            message: "Ticket image is required when sending a ticket",
+            message: "Ticket file (image or PDF) is required when sending a ticket",
           });
         }
 
@@ -575,7 +575,7 @@ export const sendMessageToUser = async (req: Request, res: Response) => {
       return res.json({
         status: "success",
         data: {
-          message: "Message with image sent successfully",
+          message: "Message with file sent successfully",
           chatId,
           userName: user.name,
           imageUploaded: true,
@@ -586,7 +586,7 @@ export const sendMessageToUser = async (req: Request, res: Response) => {
       // Send text message only
       await client.sendMessage(chatId, message);
 
-      // Handle ticket recording - image is required for tickets
+      // Handle ticket recording - file is required for tickets
       if (isTicket) {
         if (!ticketType || !price) {
           return res.status(400).json({
@@ -597,7 +597,7 @@ export const sendMessageToUser = async (req: Request, res: Response) => {
 
         return res.status(400).json({
           status: "error",
-          message: "Ticket image is required when sending a ticket",
+          message: "Ticket file (image or PDF) is required when sending a ticket",
         });
       }
 

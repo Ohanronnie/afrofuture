@@ -229,7 +229,7 @@ router.post("/payment-link", generatePaymentLinkForUser);
  *               image:
  *                 type: string
  *                 format: binary
- *                 description: Optional image file to send (jpeg, jpg, png, gif, webp, max 5MB)
+ *                 description: Optional image or PDF file to send (jpeg, jpg, png, gif, webp, pdf, max 16MB)
  *               isTicket:
  *                 type: boolean
  *                 description: Whether this message should be recorded as a ticket sale
@@ -263,14 +263,14 @@ const handleMulterError = (err: any, req: Request, res: Response, next: any) => 
     if (err.code === "LIMIT_FILE_SIZE") {
       return res.status(400).json({
         status: "error",
-        message: "File too large. Maximum size is 5MB",
+        message: "File too large. Maximum size is 16MB",
       });
     }
     
-    if (err.message === "Only image files are allowed!") {
+    if (err.message && err.message.includes("Only image files")) {
       return res.status(400).json({
         status: "error",
-        message: "Only image files are allowed (jpeg, jpg, png, gif, webp)",
+        message: "Only image files (JPEG, PNG, GIF, WebP) and PDF files are allowed",
       });
     }
     

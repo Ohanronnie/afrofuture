@@ -26,23 +26,23 @@ const storage = multer.diskStorage({
   },
 });
 
-// File filter for images
+// File filter for images and PDFs
 const fileFilter = (
   req: Express.Request,
   file: Express.Multer.File,
   cb: multer.FileFilterCallback
 ) => {
-  // Accept images only
-  const allowedTypes = /jpeg|jpg|png|gif|webp/;
-  const extname = allowedTypes.test(
-    path.extname(file.originalname).toLowerCase()
-  );
-  const mimetype = allowedTypes.test(file.mimetype);
+  // Accept images and PDFs
+  const allowedImageTypes = /jpeg|jpg|png|gif|webp/;
+  const allowedPdfTypes = /pdf/;
+  const extname = path.extname(file.originalname).toLowerCase();
+  const isImage = allowedImageTypes.test(extname) && allowedImageTypes.test(file.mimetype);
+  const isPdf = allowedPdfTypes.test(extname) && file.mimetype === "application/pdf";
 
-  if (mimetype && extname) {
+  if (isImage || isPdf) {
     return cb(null, true);
   } else {
-    cb(new Error("Only image files are allowed!"));
+    cb(new Error("Only image files (JPEG, PNG, GIF, WebP) and PDF files are allowed!"));
   }
 };
 
@@ -51,6 +51,6 @@ export const uploadImage = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
+    fileSize: 16 * 1024 * 1024, // 16MB limit (supports images and PDFs)
   },
 });
