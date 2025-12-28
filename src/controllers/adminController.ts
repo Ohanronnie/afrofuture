@@ -37,6 +37,7 @@ const sendMessageSchema = z.object({
     .optional(),
   ticketType: z.string().optional(),
   price: z.preprocess((val) => Number(val), z.number()).optional(),
+  paymentId: z.string().optional(), // Payment ID to link ticket to specific payment
 });
 
 /**
@@ -497,7 +498,7 @@ export const sendMessageToUser = async (req: Request, res: Response) => {
       throw validationError;
     }
 
-    const { chatId, message, isTicket, ticketType, price } = validatedData;
+    const { chatId, message, isTicket, ticketType, price, paymentId } = validatedData;
 
     // Check if user exists
     const user = await User.findOne({ chatId });
@@ -545,10 +546,19 @@ export const sendMessageToUser = async (req: Request, res: Response) => {
           });
         }
 
+        // Validate paymentId is provided when sending a ticket
+        if (!paymentId) {
+          return res.status(400).json({
+            status: "error",
+            message: "Payment ID is required when sending a ticket",
+          });
+        }
+
         // Create sold ticket record
         await SoldTicket.create({
           userId: user._id,
           chatId: user.chatId,
+          paymentId: paymentId, // Link ticket to specific payment
           userEmail: user.email,
           ticketType,
           price,

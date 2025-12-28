@@ -10,6 +10,11 @@ const soldTicketSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  paymentId: {
+    type: String,
+    required: true,
+    index: true,
+  },
   userEmail: {
     type: String,
   },
