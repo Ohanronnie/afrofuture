@@ -8,7 +8,8 @@ export function validateTicketType(input: string): TicketType {
   if (normalized === "a") return "GA";
   if (normalized === "b") return "VIP";
 
-  throw new ValidationError("Please reply with *A* for GA or *B* for VIP.");
+  // VIP is out of stock, so only mention GA in error
+  throw new ValidationError("Please reply with *A* to select GA tickets.");
 }
 
 // Validate payment type selection (full payment only)
