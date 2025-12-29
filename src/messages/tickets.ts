@@ -1,12 +1,12 @@
 import { TICKETS } from "../config/constants.js";
 import type { TicketType } from "../types/session.js";
+import { isVIPOutOfStock } from "../utils/ticketAvailability.js";
 
-// VIP tickets are hardcoded as out of stock
-const VIP_OUT_OF_STOCK = true;
+export async function getTicketSelectionMessage(): Promise<string> {
+  // Check VIP availability dynamically
+  const vipOutOfStock = await isVIPOutOfStock();
 
-export function getTicketSelectionMessage(): string {
-  // VIP tickets are hardcoded as out of stock
-  if (VIP_OUT_OF_STOCK) {
+  if (vipOutOfStock) {
     // Only show GA when VIP is out of stock
     return `🎟️ *Choose your ticket type* (Both Days Included):
 
@@ -18,7 +18,7 @@ export function getTicketSelectionMessage(): string {
 Reply with *A* to select.`;
   }
 
-  // If VIP becomes available again, show both options
+  // If VIP is available, show both options
   return `🎟️ *Choose your ticket type* (Both Days Included):
 
 *A.* ${TICKETS.GA.name} — GH₵${TICKETS.GA.price}

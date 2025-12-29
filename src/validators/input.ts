@@ -2,14 +2,28 @@ import { ValidationError } from "../errors/AppError.js";
 import type { TicketType, InstallmentPlan } from "../types/session.js";
 
 // Validate ticket type selection
-export function validateTicketType(input: string): TicketType {
+export function validateTicketType(
+  input: string,
+  vipOutOfStock: boolean = false
+): TicketType {
   const normalized = input.toLowerCase().trim();
 
   if (normalized === "a") return "GA";
-  if (normalized === "b") return "VIP";
+  if (normalized === "b") {
+    if (vipOutOfStock) {
+      throw new ValidationError(
+        "❌ *VIP tickets are currently out of stock.*\n\nPlease select *A* for GA tickets, or type *menu* to return to the main menu."
+      );
+    }
+    return "VIP";
+  }
 
-  // VIP is out of stock, so only mention GA in error
-  throw new ValidationError("Please reply with *A* to select GA tickets.");
+  // Dynamic error message based on VIP availability
+  const errorMessage = vipOutOfStock
+    ? "Please reply with *A* to select GA tickets."
+    : "Please reply with *A* for GA or *B* for VIP.";
+
+  throw new ValidationError(errorMessage);
 }
 
 // Validate payment type selection (full payment only)

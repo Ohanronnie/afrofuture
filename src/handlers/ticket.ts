@@ -6,12 +6,10 @@ import {
   getTicketSelectionMessage,
   getTicketConfirmationMessage,
 } from "../messages/tickets.js";
-
-// VIP tickets are hardcoded as out of stock
-const VIP_OUT_OF_STOCK = true;
+import { isVIPOutOfStock } from "../utils/ticketAvailability.js";
 
 export async function showTicketTypes(message: Message): Promise<void> {
-  const msg = getTicketSelectionMessage();
+  const msg = await getTicketSelectionMessage();
   await message.reply(msg);
 }
 
@@ -23,7 +21,8 @@ export async function handleTicketSelection(
   const normalized = userMessage.toLowerCase().trim();
 
   // Check for VIP selection first (before validation) if VIP is out of stock
-  if (VIP_OUT_OF_STOCK && (normalized === "b" || normalized === "vip")) {
+  const vipOutOfStock = await isVIPOutOfStock();
+  if (vipOutOfStock && (normalized === "b" || normalized === "vip")) {
     await message.reply(
       "❌ *VIP tickets are currently out of stock.*\n\nPlease select *A* for GA tickets, or type *menu* to return to the main menu."
     );
@@ -31,7 +30,7 @@ export async function handleTicketSelection(
   }
 
   // Validate ticket type (will throw error for invalid input)
-  const ticketType = validateTicketType(userMessage);
+  const ticketType = validateTicketType(userMessage, vipOutOfStock);
 
   session.ticketType = ticketType;
   session.totalPrice = TICKETS[ticketType].price;
