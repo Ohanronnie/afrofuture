@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { Broadcast } from "../models/Broadcast.js";
 import { User } from "../models/User.js";
+import { Payment } from "../models/Payment.js";
 import { client } from "../config/client.js";
 import type { UserSession } from "../types/session.js";
 import cron, { type ScheduledTask } from "node-cron";
@@ -19,10 +20,18 @@ export const sendBroadcast = async (
 
   // Apply filter
   if (filter === "paid") {
-    users = users.filter((user) => {
-      const session = user.session as UserSession;
-      return session.ticketId !== undefined;
+    // Get all users with successful payments
+    const paidChatIds = await Payment.distinct("chatId", {
+      status: "success",
     });
+    
+    // Filter users to only those with successful payments
+    users = users.filter((user) => {
+      if (!user.chatId) return false;
+      return paidChatIds.includes(user.chatId);
+    });
+    
+    console.log(`[BROADCAST] Filtered to ${users.length} paid users from ${paidChatIds.length} unique paid chatIds`);
   } else if (filter === "pending") {
     users = users.filter((user) => {
       const session = user.session as UserSession;
@@ -35,25 +44,32 @@ export const sendBroadcast = async (
   }
 
   let sentCount = 0;
+  let failedCount = 0;
+  const usersWithChatId = users.filter((u) => u.chatId);
+  
   console.log(
-    `Starting broadcast to ${users.length} users (filter: ${filter})...`
+    `[BROADCAST] Starting broadcast to ${users.length} users (${usersWithChatId.length} with chatId) (filter: ${filter})...`
   );
 
-  for (const user of users) {
-    if (user.chatId) {
-      try {
-        await client.sendMessage(user.chatId, message);
-        sentCount++;
-        // Small delay to avoid rate limiting
-        await new Promise((resolve) => setTimeout(resolve, 500));
-      } catch (err) {
-        console.error(`Failed to send to ${user.chatId}:`, err);
-      }
+  if (usersWithChatId.length === 0) {
+    console.warn(`[BROADCAST] WARNING: No users with chatId found for filter: ${filter}`);
+  }
+
+  for (const user of usersWithChatId) {
+    try {
+      await client.sendMessage(user.chatId!, message);
+      sentCount++;
+      console.log(`[BROADCAST] ✓ Sent to ${user.chatId} (${user.name || 'Unknown'})`);
+      // Small delay to avoid rate limiting
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    } catch (err: any) {
+      failedCount++;
+      console.error(`[BROADCAST] ✗ Failed to send to ${user.chatId} (${user.name || 'Unknown'}):`, err?.message || err);
     }
   }
 
-  console.log(`Broadcast complete: ${sentCount}/${users.length} messages sent`);
-  return { sentCount, totalUsers: users.length, filter };
+  console.log(`[BROADCAST] Complete: ${sentCount} sent, ${failedCount} failed, ${usersWithChatId.length} total users`);
+  return { sentCount, totalUsers: usersWithChatId.length, filter };
 };
 
 /**
@@ -67,16 +83,24 @@ export const createBroadcast = async (req: Request, res: Response) => {
       try {
         const result = await sendBroadcast(message, filter);
 
-        // Save to database
+        // Save to database with explicit values
         const broadcast = new Broadcast({
           message,
           filter,
           status: "sent",
-          sentCount: result.sentCount,
-          totalUsers: result.totalUsers,
+          sentCount: result.sentCount ?? 0,
+          totalUsers: result.totalUsers ?? 0,
           executedAt: new Date(),
         });
         await broadcast.save();
+
+        console.log(`[BROADCAST] Saved broadcast to DB: _id=${broadcast._id}, sentCount=${broadcast.sentCount}, totalUsers=${broadcast.totalUsers}, filter=${filter}`);
+        
+        // Verify the saved values
+        const verifyBroadcast = await Broadcast.findById(broadcast._id).lean();
+        if (verifyBroadcast) {
+          console.log(`[BROADCAST] Verification: saved sentCount=${verifyBroadcast.sentCount}, totalUsers=${verifyBroadcast.totalUsers}`);
+        }
 
         return result;
       } catch (error) {
@@ -85,6 +109,8 @@ export const createBroadcast = async (req: Request, res: Response) => {
           message,
           filter,
           status: "failed",
+          sentCount: 0,
+          totalUsers: 0,
         });
         await broadcast.save();
         throw error;
@@ -116,10 +142,11 @@ export const createBroadcast = async (req: Request, res: Response) => {
           try {
             const result = await sendBroadcast(message, filter);
             broadcast.status = "sent";
-            broadcast.sentCount = result.sentCount;
-            broadcast.totalUsers = result.totalUsers;
+            broadcast.sentCount = result.sentCount || 0;
+            broadcast.totalUsers = result.totalUsers || 0;
             broadcast.executedAt = new Date();
             await broadcast.save();
+            console.log(`[BROADCAST] Scheduled broadcast executed: sentCount=${broadcast.sentCount}, totalUsers=${broadcast.totalUsers}`);
           } catch (error) {
             broadcast.status = "failed";
             await broadcast.save();
@@ -170,10 +197,11 @@ export const createBroadcast = async (req: Request, res: Response) => {
           try {
             const result = await sendBroadcast(message, filter);
             broadcast.status = "sent";
-            broadcast.sentCount = result.sentCount;
-            broadcast.totalUsers = result.totalUsers;
+            broadcast.sentCount = result.sentCount || 0;
+            broadcast.totalUsers = result.totalUsers || 0;
             broadcast.executedAt = new Date();
             await broadcast.save();
+            console.log(`[BROADCAST] Scheduled broadcast executed: sentCount=${broadcast.sentCount}, totalUsers=${broadcast.totalUsers}`);
           } catch (error) {
             broadcast.status = "failed";
             await broadcast.save();
@@ -191,7 +219,26 @@ export const createBroadcast = async (req: Request, res: Response) => {
     } else {
       // Send immediately
       const result = await sendBroadcastAndSave();
-      res.json({ status: "success", ...result });
+      
+      // Fetch the saved broadcast to return complete data
+      const savedBroadcast = await Broadcast.findOne({
+        message,
+        filter,
+        status: "sent",
+      })
+        .sort({ createdAt: -1 })
+        .lean();
+      
+      res.json({ 
+        status: "success", 
+        ...result,
+        broadcast: savedBroadcast ? {
+          ...savedBroadcast,
+          _id: savedBroadcast._id.toString(),
+          sentCount: savedBroadcast.sentCount ?? result.sentCount,
+          totalUsers: savedBroadcast.totalUsers ?? result.totalUsers,
+        } : null,
+      });
     }
   } catch (error) {
     console.error("Broadcast error:", error);
@@ -213,16 +260,25 @@ export const getRecentBroadcasts = async (req: Request, res: Response) => {
     })
       .sort({ executedAt: -1, createdAt: -1 })
       .limit(limit)
-      .skip(skip);
+      .skip(skip)
+      .lean(); // Convert to plain objects to ensure all fields are serialized
 
     const total = await Broadcast.countDocuments({
       status: { $in: ["sent", "failed"] },
     });
 
+    // Ensure sentCount and totalUsers are included (default to 0 if undefined)
+    const broadcastsWithDefaults = broadcasts.map((broadcast: any) => ({
+      ...broadcast,
+      _id: broadcast._id.toString(),
+      sentCount: broadcast.sentCount ?? 0,
+      totalUsers: broadcast.totalUsers ?? 0,
+    }));
+
     res.json({
       status: "success",
       data: {
-        broadcasts,
+        broadcasts: broadcastsWithDefaults,
         pagination: {
           page,
           limit,
@@ -246,13 +302,23 @@ export const getScheduledBroadcasts = async (req: Request, res: Response) => {
   try {
     const broadcasts = await Broadcast.find({
       status: "scheduled",
-    }).sort({ scheduleTime: 1 });
+    })
+      .sort({ scheduleTime: 1 })
+      .lean(); // Convert to plain objects to ensure all fields are serialized
+
+    // Ensure sentCount and totalUsers are included (default to 0 if undefined)
+    const broadcastsWithDefaults = broadcasts.map((broadcast: any) => ({
+      ...broadcast,
+      _id: broadcast._id.toString(),
+      sentCount: broadcast.sentCount ?? 0,
+      totalUsers: broadcast.totalUsers ?? 0,
+    }));
 
     res.json({
       status: "success",
       data: {
-        broadcasts,
-        count: broadcasts.length,
+        broadcasts: broadcastsWithDefaults,
+        count: broadcastsWithDefaults.length,
       },
     });
   } catch (error) {
